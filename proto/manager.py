@@ -9,8 +9,10 @@ class SessionManager:
         self.settings = settings
         self.sessions: dict[str, Session] = {}
 
-    def create(self, url: str | None, stt: str, audio: str | None = None) -> Session:
-        session = Session(url, stt, self.settings, audio_file=audio)
+    def create(self, url: str | None, stt: str, audio: str | None = None,
+               keyterms: str | list[str] | None = None, speakers: bool = False, prompt: str = "") -> Session:
+        session = Session(url, stt, self.settings, audio_file=audio, keyterms=keyterms, speakers=speakers,
+                          prompt=prompt)
         self.sessions[session.id] = session
         session.start()
         return session

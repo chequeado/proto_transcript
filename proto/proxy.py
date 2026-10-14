@@ -1,9 +1,5 @@
-"""Proxies Webshare (rotating residential) con sticky session.
-
-Usuario `<base>-<país>-<n>`: el mismo n sale siempre por la misma IP mientras dure la sesión
-(Proxy Session Timeout en el panel; hoy 8 h, más que las 6 h del manifiesto de YouTube).
-Cada corrida de la ingesta usa un n distinto, así que cada reinicio sale por otra IP.
-"""
+"""Proxies Webshare con sticky session: usuario `<base>-<país>-<n>`, el mismo n = la misma IP.
+Cada corrida de la ingesta usa otro n, así que cada reinicio sale por otra IP."""
 
 import random
 from dataclasses import dataclass
@@ -13,8 +9,8 @@ from .config import Settings
 
 @dataclass
 class Proxy:
-    url: str  # con credenciales: sólo para pasarle a yt-dlp, nunca loguear
-    label: str  # para logs, ej. "ar-37"
+    url: str  # tiene la contraseña: nunca loguear
+    label: str
 
 
 class ProxyPool:

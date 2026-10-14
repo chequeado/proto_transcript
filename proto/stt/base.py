@@ -5,7 +5,7 @@ from typing import Callable, Protocol
 
 @dataclass
 class Result:
-    key: str  # identifica el turno; un final puede llegar más de una vez con el mismo key (se reemplaza)
+    key: str  # un final puede repetirse con el mismo key: reemplaza al anterior
     text: str
     final: bool
     engine: str = ""
@@ -20,7 +20,7 @@ class STTClient(Protocol):
     name: str
 
     async def run(self, audio: "asyncio.Queue[bytes | None]", on_result: Callable[[Result], None]) -> None:
-        """Consume PCM (formato de audio.py) de la cola hasta recibir None. Se reconecta solo si hace falta."""
+        """Consume PCM de la cola hasta recibir None."""
         ...
 
 
@@ -31,11 +31,12 @@ class FatalSTTError(Exception):
 ENGINES = ("assemblyai", "null")
 
 
-def make_stt(name: str, settings, log) -> STTClient:
+def make_stt(name: str, settings, log, keyterms: list[str] | None = None, speakers: bool = False,
+             prompt: str = "") -> STTClient:
     if name == "null":
         from .null import NullClient
         return NullClient(log)
     if name == "assemblyai":
         from .assemblyai import AssemblyAIClient
-        return AssemblyAIClient(settings, log)
+        return AssemblyAIClient(settings, log, keyterms=keyterms, speakers=speakers, prompt=prompt)
     raise ValueError(f"motor STT desconocido: {name} (opciones: {', '.join(ENGINES)})")

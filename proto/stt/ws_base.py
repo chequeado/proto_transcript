@@ -1,8 +1,5 @@
-"""Base para motores STT por WebSocket: cola de audio, reconexión con backoff y rotación de sesión.
-
-Cada subclase implementa sólo su protocolo (url, headers, cómo mandar audio, cómo cerrar, qué mensajes llegan).
-Garantía: un chunk sacado de la cola que no se llegó a mandar se guarda y se manda en la conexión siguiente.
-"""
+"""Base para motores STT por WebSocket: reconexión con backoff y rotación de sesión.
+Un chunk sacado de la cola que no se llegó a mandar se manda en la conexión siguiente (no se pierde audio)."""
 
 import asyncio
 import json
@@ -18,7 +15,7 @@ BACKOFF = [1, 2, 5, 10, 30]
 
 class WebSocketSTT:
     name = "ws"
-    rotate_after_s: float = 3600  # límite de duración de sesión del proveedor, con margen
+    rotate_after_s: float = 3600
 
     def __init__(self, log):
         self._log = log
@@ -28,24 +25,20 @@ class WebSocketSTT:
     def log(self, kind: str, **data):
         return self._log(kind, engine=self.name, **data)
 
-    # ---- a implementar por cada motor ----
-
     def url(self) -> str: ...
 
     def headers(self) -> dict: ...
 
     async def on_open(self, ws) -> None:
-        """Configuración inicial (p.ej. session.update)."""
+        pass
 
     async def send_audio(self, ws, chunk: bytes) -> None: ...
 
     async def finish(self, ws, recv: asyncio.Task, rotating: bool) -> None:
-        """Cerrar prolijamente: pedir lo pendiente, avisar fin y esperar la respuesta final."""
+        pass
 
     async def handle(self, msg, n: int, on_result) -> None:
-        """Procesar un mensaje del server."""
-
-    # ---- ciclo común ----
+        pass
 
     async def run(self, audio, on_result) -> None:
         fails = 0
@@ -69,7 +62,7 @@ class WebSocketSTT:
                 await asyncio.sleep(delay)
 
     async def _ws_session(self, audio, on_result) -> bool:
-        """Una conexión WS. True si se terminó el audio; False si hay que reconectar (rotación)."""
+        """True si se terminó el audio; False si hay que reconectar (rotación)."""
         self.ws_sessions += 1
         n = self.ws_sessions
         async with websockets.connect(self.url(), additional_headers=self.headers(), max_size=None,
@@ -93,7 +86,7 @@ class WebSocketSTT:
                         done, _ = await asyncio.wait({get, recv}, timeout=remaining,
                                                      return_when=asyncio.FIRST_COMPLETED)
                         if get not in done:
-                            if recv in done:  # el server cerró: reconectar con backoff
+                            if recv in done:
                                 recv.result()
                                 raise ConnectionError(f"el server cerró ws_session {n}: {ws.close_code} {ws.close_reason}")
                             continue

@@ -1,16 +1,7 @@
-"""Compara las transcripciones de los motores de una sesión.
+"""Uso: python -m proto.compare data/sessions/<id> [--ref referencia.txt]
 
-Uso:
-  python -m proto.compare data/sessions/<id> [--ref referencia.txt]
-
-Escribe en la carpeta de la sesión:
-  texto-<motor>.txt   el texto completo de cada motor, para leer y corregir
-  comparacion.md      métricas
-Métricas:
-  - Sin referencia: diferencia entre motores (WER de uno contra otro). Alta = no coinciden, pero no dice cuál está bien.
-  - Con referencia (texto corregido por una persona escuchando el audio): WER de cada motor, desglosado en
-    sustituciones / borrados / inserciones, y cuántos números de la referencia aparecen bien.
-Normalización antes de medir: minúsculas, sin tildes, sin puntuación. "diez" vs "10" cuenta como error.
+Deja texto-<motor>.txt y comparacion.md en la sesión. Con --ref (texto corregido por una persona) mide WER
+(sustituciones / borrados / inserciones) y números acertados. Normaliza: minúsculas, sin tildes ni puntuación.
 """
 
 import argparse
@@ -28,7 +19,7 @@ def load_texts(session_dir: Path) -> dict[str, str]:
     finals: dict[str, dict[str, str]] = {}
     for line in (session_dir / "transcript.jsonl").read_text(encoding="utf-8").splitlines():
         d = json.loads(line)
-        finals.setdefault(d["engine"], {})[d["key"]] = d["text"]  # mismo key = reemplazo, conserva el orden
+        finals.setdefault(d["engine"], {})[d["key"]] = d["text"]
     return {engine: " ".join(t.strip() for t in turns.values() if t.strip()) for engine, turns in finals.items()}
 
 
@@ -40,7 +31,7 @@ def normalize(text: str) -> list[str]:
 
 
 def edit_ops(ref: list[str], hyp: list[str]) -> Counter:
-    """Distancia de edición por palabras con conteo de sustituciones (S), borrados (D) e inserciones (I)."""
+    """Distancia de edición por palabras, con conteo de sustituciones (S), borrados (D) e inserciones (I)."""
     prev = [(j, Counter(I=j)) for j in range(len(hyp) + 1)]
     for i in range(1, len(ref) + 1):
         cur = [(i, Counter(D=i))]
@@ -72,7 +63,7 @@ def engine_costs(session_dir: Path) -> dict[str, float]:
         e = json.loads(line)
         if e["kind"] == "session_end":
             for name, x in (e["stats"].get("engines") or {}).items():
-                usd = cost(name, x.get("model"), x.get("billed_s") or 0)
+                usd = cost(name, x.get("model"), x.get("billed_s") or 0, speakers=x.get("speakers", False))
                 if usd is not None:
                     out[name] = usd
     return out

@@ -1,9 +1,5 @@
-"""FileSource: reproduce un audio grabado a velocidad real, con la misma interfaz que AudioSource.
-
-Sirve para pasar exactamente el mismo audio por varios motores (comparación) y repetir pruebas.
-Acepta el audio.pcm de una sesión (lee la frecuencia de su meta.json; las sesiones viejas eran de 16 kHz)
-o cualquier archivo que entienda ffmpeg (mp3, wav, m4a, mp4...).
-"""
+"""FileSource: reproduce un audio grabado (audio.pcm de una sesión o cualquier archivo de ffmpeg) a velocidad
+real, con la misma interfaz que AudioSource."""
 
 import asyncio
 import json
@@ -25,7 +21,6 @@ class FileSource:
         self.log = log
         self._proc: asyncio.subprocess.Process | None = None
         self._stopping = False
-        # mismos atributos que AudioSource, para Session.stats()
         self.state = "idle"
         self.runs = 0
         self.exit_reasons: Counter[str] = Counter()

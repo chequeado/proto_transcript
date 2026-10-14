@@ -1,11 +1,7 @@
-"""Ingesta: yt-dlp | ffmpeg -> PCM mono s16le (ver audio.py), con supervisor.
+"""Ingesta: yt-dlp | ffmpeg -> PCM, con supervisor que reinicia cada "corrida" y registra por qué se cortó.
 
-Cada "corrida" lanza yt-dlp (escribe el stream en stdout) conectado por un pipe a ffmpeg (lo pasa a PCM).
-Si cualquiera de los dos muere, o no llega audio en `stall_seconds`, se matan ambos, se registra el motivo
-y se vuelve a arrancar (lo que implica una extracción nueva, con URL de manifiesto nueva).
-Cada corrida hace UNA sola extracción: con --match-filter yt-dlp sólo baja si el video sigue en vivo,
-así que si el vivo terminó lo dice ahí mismo (cada extracción extra es una chance más de bot_check).
-La sesión termina sólo si se pide parar o si el vivo terminó.
+Una sola extracción por corrida (cada pedido extra a YouTube es otra chance de bot_check): --match-filter
+hace que esa misma extracción detecte el fin del vivo. Termina sólo si se pide parar o si el vivo terminó.
 """
 
 import asyncio
@@ -25,13 +21,13 @@ from .config import Settings
 from .proxy import Proxy, ProxyPool
 
 BACKOFF = [2, 5, 10, 30, 60]
-HEALTHY_RUN_SECONDS = 60  # una corrida más larga que esto resetea el backoff
-FIRST_AUDIO_TIMEOUT = 90  # la extracción inicial de yt-dlp puede tardar
-SPEED_SAMPLE_EVERY = 5  # segundos entre muestras para medir velocidad
-# Ruido del ffmpeg interno de yt-dlp: progreso (~5/s), un "Opening" por segmento, tags HLS de publicidad
+HEALTHY_RUN_SECONDS = 60
+FIRST_AUDIO_TIMEOUT = 90
+SPEED_SAMPLE_EVERY = 5
+# progreso y un "Opening" por segmento del ffmpeg interno de yt-dlp
 NOISE_LINE = re.compile(r"^\s*(size|frame)=|^\[hls @ [^\]]+\] Skip \(|^\[https? @ [^\]]+\] Opening '|^Press \[q\]")
 
-YOUTUBE_BLOCK = {"bot_check", "http_403", "http_429"}  # en modo fallback, estos activan el proxy
+YOUTUBE_BLOCK = {"bot_check", "http_403", "http_429"}
 PROXY_ERRORS = re.compile(
     r"ProxyError|Tunnel connection failed|Unable to connect to proxy|Cannot connect to proxy|"
     r"Proxy Authentication|\b407\b|502 Bad Gateway", re.I)
@@ -44,7 +40,6 @@ REASONS = [
     ("http_5xx", re.compile(r"\b5\d\d\b.*(Error|Gateway|Unavailable)|HTTP Error 5\d\d", re.I)),
     ("unavailable", re.compile(r"Video unavailable|Private video|members-only", re.I)),
     ("extract_error", re.compile(r"Failed to resolve url|Unable to extract|unable to download", re.I)),
-    # se cayó la conexión mientras bajaba (visto con proxy: el ffmpeg interno no pudo recargar la playlist)
     ("conn_lost", re.compile(r"Stream ends prematurely|Failed to reload playlist|IO error|session has been invalidated",
                              re.I)),
 ]
@@ -53,7 +48,7 @@ REASONS = [
 def classify(stderr_lines: list[str], proxied: bool = False) -> str | None:
     text = "\n".join(stderr_lines)
     if proxied and PROXY_ERRORS.search(text):
-        return "proxy_error"  # falló Webshare, no YouTube
+        return "proxy_error"
     for name, rx in REASONS:
         if rx.search(text):
             return name
@@ -66,7 +61,6 @@ def last_relevant(lines) -> str | None:
 
 
 def parse_manifest_url(url: str) -> dict:
-    """Las URLs de googlevideo llevan /ip/<ip>/ y /expire/<unix>/ (o ?ip=&expire=)."""
     url = unquote(url)
     out = {}
     for key in ("ip", "expire"):
@@ -80,7 +74,7 @@ def parse_manifest_url(url: str) -> dict:
 
 class AudioSource:
     def __init__(self, url: str, log: Callable, settings: Settings, workdir: Path):
-        self.url = url  # se reemplaza por la URL concreta del video (webpage_url) después de la 1ra extracción
+        self.url = url
         self.log = log
         self.s = settings
         self.workdir = workdir
@@ -91,20 +85,18 @@ class AudioSource:
         self.runs = 0
         self.exit_reasons: Counter[str] = Counter()
         self.bytes_total = 0
-        self.last_audio_at: float | None = None  # time.time()
+        self.last_audio_at: float | None = None
         self.ended_reason: str | None = None
-        self.speed: float | None = None  # audio/reloj en la ventana reciente de la corrida actual (1.0 = tiempo real)
+        self.speed: float | None = None
 
         self.proxies = ProxyPool(settings)
         self.use_proxy = self.proxies.mode == "always"
-        self.proxy: Proxy | None = None  # el de la corrida actual
-
-    # ---- comandos ----
+        self.proxy: Proxy | None = None
 
     def _ytdlp_base(self) -> list[str]:
         cmd = [sys.executable, "-m", "yt_dlp", "--js-runtimes", self.s.ytdlp_js_runtime, "--no-playlist"]
         if self.proxy:
-            cmd += ["--proxy", self.proxy.url]  # yt-dlp se lo pasa también a su ffmpeg interno
+            cmd += ["--proxy", self.proxy.url]
         if self.s.yt_cookies_file:
             cmd += ["--cookies", self.s.yt_cookies_file]
         cmd += shlex.split(self.s.ytdlp_extra_args)
@@ -127,10 +119,7 @@ class AudioSource:
             "-i", "pipe:0", "-vn", "-ac", "1", "-ar", str(SAMPLE_RATE), "-f", "s16le", "pipe:1",
         ]
 
-    # ---- ciclo principal ----
-
     async def chunks(self) -> AsyncIterator[bytes]:
-        """Entrega bloques de 100 ms de PCM. Reinicia la descarga sola hasta que se pare o termine el vivo."""
         fails = 0
         while not self._stopping.is_set():
             self.runs += 1
@@ -139,7 +128,7 @@ class AudioSource:
             run_bytes = 0
             stalled = slow = False
             first_audio_at: float | None = None
-            samples: deque[tuple[float, int]] = deque()  # (monotonic, run_bytes)
+            samples: deque[tuple[float, int]] = deque()
             self.speed = None
             tails: dict[str, deque] = {"ytdlp": deque(maxlen=30), "ffmpeg": deque(maxlen=30)}
             info_file = self.workdir / f"run-{run_no:03d}.info"
@@ -155,7 +144,7 @@ class AudioSource:
                     try:
                         chunk = await asyncio.wait_for(ffmpeg.stdout.readexactly(CHUNK_BYTES), timeout)
                     except asyncio.IncompleteReadError as e:
-                        chunk = e.partial  # EOF: ffmpeg terminó
+                        chunk = e.partial
                         if len(chunk) >= CHUNK_BYTES // 2:
                             yield chunk
                         break
@@ -181,7 +170,7 @@ class AudioSource:
                         break
             finally:
                 await self._kill(ytdlp, ffmpeg)
-                # con tope: si quedara algún proceso con el stderr abierto, no colgarse esperándolo
+                # con tope: un proceso huérfano puede dejar el stderr abierto y colgar la sesión
                 _, pending = await asyncio.wait(readers, timeout=5)
                 for t in pending:
                     t.cancel()
@@ -228,7 +217,7 @@ class AudioSource:
         self.state = "ended" if self.ended_reason else "stopped"
 
     def _too_slow(self, samples: deque, run_bytes: int) -> bool:
-        """Mide audio/reloj en una ventana deslizante. True si estuvo por debajo de slow_ratio toda la ventana."""
+        """True si la velocidad (audio/reloj) estuvo debajo de slow_ratio durante toda la ventana."""
         now = time.monotonic()
         if samples and now - samples[-1][0] < SPEED_SAMPLE_EVERY:
             return False
@@ -246,8 +235,6 @@ class AudioSource:
         self._stopping.set()
         for p in self._procs:
             self._killpg(p)
-
-    # ---- procesos ----
 
     async def _spawn(self, info_file: Path, tails: dict[str, deque]):
         info_file.unlink(missing_ok=True)
@@ -282,9 +269,8 @@ class AudioSource:
 
     @staticmethod
     def _killpg(proc) -> None:
-        """SIGKILL al grupo entero, aunque el líder ya haya muerto: yt-dlp baja con un ffmpeg hijo que
-        puede quedar huérfano (y trabado en una lectura por el proxy) si sólo muere yt-dlp.
-        No hace falta cierre prolijo: lo que ya salió por el pipe ya está guardado."""
+        # Al grupo entero aunque el líder ya haya muerto: el ffmpeg hijo de yt-dlp puede quedar huérfano
+        # y trabado leyendo del proxy.
         try:
             os.killpg(proc.pid, signal.SIGKILL)
         except (ProcessLookupError, PermissionError):

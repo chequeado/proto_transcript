@@ -6,6 +6,36 @@ que reinicia la descarga y registra cada caída con timestamp y motivo.
 El núcleo (`ingest.py`, `stt/`, `session.py`) es asyncio puro, sin depender de FastAPI: se puede llevar
 a Django/Channels cambiando sólo la capa web (`web/app.py`).
 
+Actualmente se utiliza Assembly realtime, se puede encontrar info de los parametros acá, pero el resumen es este:
+https://www.assemblyai.com/docs/streaming/select-the-speech-model
+
+Modelo `universal-3-6-pro`, US$0,45/h, cobrado por tiempo de conexión abierta (aunque no llegue audio).
+
+### Prompt y Keyterms
+Los dos son opcionales, por sesión, y sin costo extra. Si no se cargan, no se mandan.
+- **Prompt:** una o dos frases que describen el audio, como contexto, no como instrucciones. Por ejemplo:
+  *"Entrevista radial en Argentina con un dirigente peronista sobre Milei y política nuclear."*
+  [Doc](https://www.assemblyai.com/docs/streaming/prompting-and-keyterms).
+  - La doc sugiere 5–50 palabras y comparar contra la misma corrida sin prompt.
+  - En la primera prueba (90 s) no mejoró.
+- **Keyterms:** una lista de nombres propios y siglas que el modelo favorece, como `Kirchner, ARSAT, Milei`.
+  - Hasta 100 términos de ≤50 caracteres cada uno.
+  - Es lo más directo para que escriba bien los nombres.
+
+### Speaker diarization
+Separa quién habla (A, B, …). Es opcional y cuesta +US$0,12/h (US$0,57/h en total).
+[Doc](https://www.assemblyai.com/docs/streaming/label-speakers-and-separate-channels).
+- **Cómo lo armamos:** AssemblyAI no corta la frase cuando cambia el hablante, sino que marca cada palabra con su
+  hablante. Con esas marcas el prototipo arma un renglón por cada tramo de un mismo hablante.
+- **Efecto extra:** las frases se cierran antes, porque AssemblyAI pasa a esperar un silencio máximo de 768 ms en
+  vez de 1280 ms.
+- **Limitaciones, según la doc:**
+  - Las primeras frases de la sesión suelen quedar mal asignadas, y mejora con el tiempo.
+  - Si dos personas hablan a la vez, queda todo atribuido a una.
+  - Las frases de menos de 1 s quedan como `PENDING`.
+- **Pendiente:** al cerrar la sesión, AssemblyAI manda las correcciones de etiquetas (`SpeakerRevision`). Por ahora
+  solo se guardan en `events.jsonl`.
+
 ## Setup
 
 ```bash
@@ -93,6 +123,10 @@ jq -r 'select(.kind=="ingest_exit") | [.ts, .reason, .duration_s] | @tsv' data/s
 |---|---|---|---|
 | `assemblyai` | Universal-Streaming v3 (`universal-3-6-pro`) | US$0,45/h | tiempo de conexión abierta |
 | `null` | Descarta el audio (sólo ingesta, sin costo) | — | — |
+
+**Opciones por sesión** (ver arriba). En la web van al lado de la URL; en la terminal:
+`--prompt "..."`, `--keyterms "a, b"` (o `--keyterms-file`, uno por línea) y `--speakers`.
+Con hablantes, cada final trae `extra.segments` (`[{speaker, text}]`) en transcript.jsonl.
 
 **Repetir un audio grabado** (a velocidad real, como si fuera en vivo):
 ```bash

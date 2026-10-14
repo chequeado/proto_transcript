@@ -25,8 +25,11 @@ app = FastAPI(title="proto_transcript", lifespan=lifespan)
 
 class NewSession(BaseModel):
     url: str | None = None
-    audio: str | None = None  # ruta local a un audio grabado (repetición)
-    stt: str = "assemblyai"  # uno o varios motores separados por comas
+    audio: str | None = None
+    stt: str = "assemblyai"
+    prompt: str = ""
+    keyterms: str | list[str] | None = None
+    speakers: bool = False
 
 
 def get_session(session_id: str):
@@ -46,8 +49,9 @@ async def create_session(body: NewSession):
     try:
         if not body.url and not body.audio:
             raise ValueError("falta url o audio")
-        session = manager.create(body.url, body.stt, body.audio)
-    except Exception as e:  # p.ej. falta la API key o motor desconocido
+        session = manager.create(body.url, body.stt, body.audio, keyterms=body.keyterms, speakers=body.speakers,
+                                 prompt=body.prompt)
+    except Exception as e:
         raise HTTPException(400, str(e))
     return session.stats()
 

@@ -1,8 +1,5 @@
-"""Session: une una fuente de audio -> una cola por motor -> uno o más motores STT en paralelo.
-
-Con varios motores, todos reciben exactamente el mismo audio al mismo tiempo (comparación justa).
-Guarda todo en data/sessions/<id>/ y avisa a suscriptores. No depende de ningún framework web.
-"""
+"""Session: fuente de audio -> una cola por motor STT. Guarda en data/sessions/<id>/ y avisa a suscriptores.
+No depende de ningún framework web."""
 
 import asyncio
 import json
@@ -16,10 +13,11 @@ from .config import Settings
 from .events import EventLog
 from .ingest import AudioSource
 from .replay import FileSource
+from .stt.assemblyai import clean_keyterms
 from .stt.base import Result, make_stt
 
 BROADCAST_SKIP = {"ytdlp_stderr", "ffmpeg_stderr"}
-HEARTBEAT_EVERY = 300  # resumen de estado cada 5 min
+HEARTBEAT_EVERY = 300
 
 
 class Engine:
@@ -27,6 +25,7 @@ class Engine:
         self.name = name
         self.client = client
         self.model = getattr(client, "model", None)
+        self.speakers = getattr(client, "speakers", False)
         self.queue: asyncio.Queue[bytes | None] = asyncio.Queue()
         self.task: asyncio.Task | None = None
         self.finals = 0
@@ -37,7 +36,11 @@ class Engine:
 
 class Session:
     def __init__(self, url: str | None, stt: str, settings: Settings, verbose: bool = False,
-                 audio_file: str | None = None):
+                 audio_file: str | None = None, keyterms: str | list[str] | None = None, speakers: bool = False,
+                 prompt: str = ""):
+        self.keyterms = clean_keyterms(keyterms)
+        self.speakers = speakers
+        self.prompt = (prompt or "").strip()
         self.id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
         self.settings = settings
         self.dir = settings.data_dir / "sessions" / self.id
@@ -53,9 +56,11 @@ class Session:
             self.source = AudioSource(url, self.log, settings, self.dir)
         names = [n.strip() for n in stt.split(",") if n.strip()]
         self.stt_name = ",".join(names)
-        self.engines = {n: Engine(n, make_stt(n, settings, self.log)) for n in names}
+        self.engines = {n: Engine(n, make_stt(n, settings, self.log, keyterms=self.keyterms, speakers=speakers,
+                                                prompt=self.prompt))
+                        for n in names}
 
-        self.finals: dict[str, dict] = {}  # "<motor>:<key>" -> final (se reemplaza si llega de nuevo)
+        self.finals: dict[str, dict] = {}
         self.recent_events: deque[dict] = deque(maxlen=200)
         self.subscribers: set[asyncio.Queue] = set()
         self.started_at = time.time()
@@ -64,16 +69,14 @@ class Session:
         self._task: asyncio.Task | None = None
         self._transcript_fh = open(self.dir / "transcript.jsonl", "a", encoding="utf-8")
 
-    # ---- ciclo de vida ----
-
     def start(self) -> None:
         s = self.settings
         (self.dir / "meta.json").write_text(json.dumps({
             "id": self.id, "url": self.url, "stt": self.stt_name, "sample_rate": SAMPLE_RATE,
             "started_at": datetime.fromtimestamp(self.started_at, timezone.utc).isoformat(),
             "models": {"assemblyai": s.assemblyai_model},
-            "language": s.stt_language,
-        }, indent=2))
+            "language": s.stt_language, "prompt": self.prompt, "keyterms": self.keyterms, "speakers": self.speakers,
+        }, indent=2, ensure_ascii=False))
         self._task = asyncio.create_task(self._run())
 
     async def stop(self) -> None:
@@ -108,7 +111,6 @@ class Session:
             for e in self.engines.values():
                 e.queue.put_nowait(None)
             tasks = [e.task for e in self.engines.values()]
-            # AssemblyAI cierra en segundos (Terminate); el tope es por si el server no contesta
             done, pending = await asyncio.wait(tasks, timeout=60)
             for t in pending:
                 t.cancel()
@@ -136,8 +138,6 @@ class Session:
             self.error = "todos los motores STT fallaron"
             self.source.stop()
 
-    # ---- resultados y eventos ----
-
     def _on_result(self, r: Result) -> None:
         d = r.to_dict()
         d["ts"] = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
@@ -164,8 +164,6 @@ class Session:
         self.recent_events.append(event)
         self._publish({"type": "event", "event": event})
 
-    # ---- pub/sub ----
-
     def subscribe(self) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=1000)
         self.subscribers.add(q)
@@ -179,9 +177,7 @@ class Session:
             try:
                 q.put_nowait(msg)
             except asyncio.QueueFull:
-                pass  # cliente lento: se pierde el mensaje (los finales igual quedan en el historial)
-
-    # ---- estado ----
+                pass
 
     def stats(self) -> dict:
         src = self.source
@@ -194,6 +190,9 @@ class Session:
             "url": self.url,
             "video_url": src.url,
             "stt": self.stt_name,
+            "prompt": self.prompt,
+            "keyterms": self.keyterms,
+            "speakers": self.speakers,
             "running": self.ended_at is None,
             "ingest_state": src.state,
             "ended_reason": src.ended_reason,
@@ -211,6 +210,6 @@ class Session:
             "last_audio_ago_s": round(time.time() - src.last_audio_at, 1) if src.last_audio_at else None,
             "finals": len(self.finals),
             "stt_queue": max((e.queue.qsize() for e in self.engines.values()), default=0),
-            "engines": {n: {"model": e.model, "finals": e.finals, "language": e.language, "billed_s": round(e.billed_s),
+            "engines": {n: {"model": e.model, "speakers": e.speakers, "finals": e.finals, "language": e.language, "billed_s": round(e.billed_s),
                             "queue": e.queue.qsize(), "error": e.error} for n, e in self.engines.items()},
         }

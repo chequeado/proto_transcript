@@ -1,8 +1,4 @@
-"""Registro de eventos con timestamp, en JSONL. Cada línea: {ts, t, kind, ...datos, msg?}.
-
-En events.jsonl queda todo. En la terminal (y en el panel de la web) sólo los eventos que tienen un
-mensaje legible (`msg`, armado por `human()`); con verbose se imprime todo crudo.
-"""
+"""Eventos en JSONL ({ts, t, kind, ...}). En la terminal y la web sólo se muestran los que tienen `msg` (human())."""
 
 import json
 import sys
@@ -23,7 +19,6 @@ def hms(seconds: float | None) -> str:
 
 
 def last_error(lines: list[str]) -> str | None:
-    """El error más útil del stderr: primero los ERROR: de yt-dlp, después cualquier error/warning."""
     lines = lines or []
     for test in (lambda l: "ERROR:" in l, lambda l: "error" in l.lower() or "WARNING" in l):
         for line in reversed(lines):
@@ -33,7 +28,6 @@ def last_error(lines: list[str]) -> str | None:
 
 
 def human(e: dict) -> str | None:
-    """Mensaje corto para los eventos que importan. None = no se muestra."""
     k = e["kind"]
     stt = f"stt[{e.get('engine', '?')}]"
     if k == "session_start":
@@ -70,7 +64,9 @@ def human(e: dict) -> str | None:
         return f"■ el vivo terminó · {(e.get('detail') or '')[:150]}"
     if k == "stt_begin":
         conn = f" (conexión #{e['ws_session']})" if e.get("ws_session") else ""
-        return f"  {stt}: conectado · modelo {e.get('model') or '?'}{conn}"
+        opts = ((" · con prompt" if e.get("prompt") else "") + (f" · {e['keyterms']} keyterms" if e.get("keyterms") else "")
+                + (" · hablantes" if e.get("speakers") else ""))
+        return f"  {stt}: conectado · modelo {e.get('model') or '?'}{opts}{conn}"
     if k == "stt_language":
         return f"  {stt}: idioma detectado {e['language']}"
     if k in ("stt_warning", "stt_error", "stt_fatal"):
@@ -97,7 +93,7 @@ def human(e: dict) -> str | None:
         lines = [f"■ sesión terminada · {hms(s['wall_s'])} · audio {hms(s['audio_s'])} "
                  f"({(s['coverage'] or 0):.0%}) · corridas {s['runs']} · cortes: {cuts}"]
         for name, x in (s.get("engines") or {}).items():
-            usd = cost(name, x.get("model"), x.get("billed_s") or 0)
+            usd = cost(name, x.get("model"), x.get("billed_s") or 0, speakers=x.get("speakers", False))
             lines.append(f"  {name}: {x['finals']} frases · facturable {hms(x['billed_s'])}"
                          + (f" ≈ US${usd:.3f}" if usd is not None else "")
                          + (f" · ERROR {x['error']}" if x.get("error") else ""))
@@ -111,7 +107,7 @@ class EventLog:
         self.verbose = verbose
         self.t0 = time.monotonic()
         self.listeners: list[Callable[[dict], None]] = []
-        self.before_print: Callable[[], None] | None = None  # p.ej. el CLI borra la línea de parcial
+        self.before_print: Callable[[], None] | None = None
         self._fh = open(path, "a", encoding="utf-8") if path else None
 
     def __call__(self, kind: str, **data: Any) -> dict:

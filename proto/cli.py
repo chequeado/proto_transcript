@@ -1,5 +1,6 @@
 """Uso:
-  python -m proto.cli URL [--stt assemblyai|null] [-v]
+  python -m proto.cli URL [--stt assemblyai|null] [--prompt "Entrevista radial sobre..."]
+                          [--keyterms "Milei, ARSAT"] [--speakers] [-v]
   python -m proto.cli --audio data/sessions/<id>/audio.pcm
 
 Transcribe un vivo (o reproduce un audio grabado a velocidad real) en la terminal. Ctrl-C para parar.
@@ -19,7 +20,6 @@ TAGS = {"assemblyai": "aai"}
 
 
 class Screen:
-    """Comparte la terminal entre la línea gris de parcial (stdout) y los logs (stderr) sin que se pisen."""
 
     def __init__(self):
         self.tty = sys.stdout.isatty()
@@ -49,13 +49,22 @@ async def main() -> None:
     ap.add_argument("url", nargs="?")
     ap.add_argument("--audio", help="reproducir un audio grabado en vez de un vivo")
     ap.add_argument("--stt", default="assemblyai", help="motor o lista separada por comas")
+    ap.add_argument("--prompt", default="", help="contexto del audio en frases (no instrucciones), 5–50 palabras")
+    ap.add_argument("--keyterms", help="términos a favorecer, separados por coma (máx. 100, ≤50 caracteres c/u)")
+    ap.add_argument("--keyterms-file", help="archivo con un término por línea")
+    ap.add_argument("--speakers", action="store_true", help="separar hablantes (+US$0,12/h)")
     ap.add_argument("-v", "--verbose", action="store_true", help="mostrar también el stderr de yt-dlp/ffmpeg")
     args = ap.parse_args()
     if not args.url and not args.audio:
         ap.error("falta la URL del vivo o --audio")
+    keyterms = ",".join(filter(None, [args.keyterms, args.keyterms_file and open(args.keyterms_file).read()]))
 
     screen = Screen()
-    session = Session(args.url, args.stt, settings, verbose=args.verbose, audio_file=args.audio)
+    try:
+        session = Session(args.url, args.stt, settings, verbose=args.verbose, audio_file=args.audio,
+                          keyterms=keyterms, speakers=args.speakers, prompt=args.prompt)
+    except ValueError as e:
+        ap.error(str(e))
     session.log.before_print = screen.clear_partial
     print(f"sesión {session.id} -> {session.dir}", file=sys.stderr)
 
@@ -81,7 +90,12 @@ async def print_results(q: asyncio.Queue, screen: Screen, first: str, many: bool
             hora = datetime.fromisoformat(msg["ts"]).astimezone().strftime("%H:%M:%S")
             tag = f" [{TAGS.get(msg['engine'], msg['engine'])}]" if many else ""
             lang = f" [{msg['language']}]" if msg.get("language") and not many else ""
-            screen.line(f"{hora}{tag}{lang} {msg['text']}")
+            segments = (msg.get("extra") or {}).get("segments")
+            if segments:
+                for s in segments:
+                    screen.line(f"{hora}{tag} [{s['speaker']}] {s['text']}")
+            else:
+                screen.line(f"{hora}{tag}{lang} {msg['text']}")
 
 
 if __name__ == "__main__":

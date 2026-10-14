@@ -19,6 +19,9 @@
   header h1 { font-size: 15px; margin: 0 12px 0 0; }
   input, select, button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); }
   input[type=url] { flex: 1; min-width: 240px; }
+  #keyterms { flex: 1; min-width: 200px; }
+  #prompt { flex: 2; min-width: 280px; }
+  .col .spk { font-weight: 600; color: var(--accent); margin-right: 6px; }
   button { cursor: pointer; }
   button.primary { background: var(--accent); color: white; border-color: var(--accent); }
   main { display: grid; grid-template-columns: 1fr 360px; gap: 16px; padding: 16px; height: calc(100vh - 60px); }
@@ -52,7 +55,11 @@
   <span class="engines">
     <label><input type="checkbox" name="stt" value="assemblyai" checked> AssemblyAI</label>
     <label><input type="checkbox" name="stt" value="null"> null</label>
+    <label title="+US$0,12/h"><input type="checkbox" id="speakers"> separar hablantes</label>
   </span>
+  <input id="prompt" type="text" placeholder="contexto (opcional): Entrevista radial con un dirigente peronista sobre Milei y política nuclear">
+  <input id="keyterms" type="text" placeholder="keyterms (opcional): Milei, ARSAT, Pilcaniyeu">
+
   <button class="primary" id="start">Empezar</button>
   <select id="sessions"><option value="">— sesiones —</option></select>
   <button id="stop">Parar</button>
@@ -85,7 +92,7 @@ async function refreshList() {
 
 function renderStatus(s) {
   const fmt = (v) => typeof v === 'object' && v !== null ? JSON.stringify(v) : v;
-  const keys = ['running', 'ingest_state', 'ended_reason', 'error', 'video_url', 'wall_s', 'audio_s', 'coverage', 'speed',
+  const keys = ['running', 'prompt', 'keyterms', 'speakers', 'ingest_state', 'ended_reason', 'error', 'video_url', 'wall_s', 'audio_s', 'coverage', 'speed',
                 'proxy_mode', 'proxy', 'runs', 'exit_reasons', 'last_audio_ago_s', 'finals', 'stt_queue', 'engines'];
   $('#status dl').innerHTML = keys.map(k => `<dt>${k}</dt><dd>${fmt(s[k]) ?? '—'}</dd>`).join('');
 }
@@ -114,11 +121,19 @@ function addFinal(f) {
   col.querySelector('.partial').textContent = '';
   const t = new Date(f.ts).toLocaleTimeString();
   p.innerHTML = `<time>${t}</time>`;
-  p.appendChild(document.createTextNode(f.text));
+  const segments = (f.extra || {}).segments;
+  if (!segments) { p.appendChild(document.createTextNode(f.text)); return; }
+  segments.forEach((s, i) => {
+    if (i) p.appendChild(document.createElement('br'));
+    const spk = document.createElement('span');
+    spk.className = 'spk';
+    spk.textContent = s.speaker;
+    p.append(spk, document.createTextNode(s.text));
+  });
 }
 
 function addEvent(e) {
-  if (!e.msg) return;  // sólo los eventos importantes (el detalle queda en events.jsonl)
+  if (!e.msg) return;
   const d = document.createElement('div');
   d.className = 'k-' + e.kind;
   d.textContent = `${new Date(e.ts).toLocaleTimeString()} ${e.msg.trim()}`;
@@ -164,7 +179,9 @@ $('#start').onclick = async () => {
   if (!url) return;
   try {
     const s = await api('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                           body: JSON.stringify({ url, stt: [...document.querySelectorAll('input[name=stt]:checked')].map(c => c.value).join(',') }) });
+                                           body: JSON.stringify({ url, stt: [...document.querySelectorAll('input[name=stt]:checked')].map(c => c.value).join(','),
+                                                                  prompt: $('#prompt').value, keyterms: $('#keyterms').value,
+                                                                  speakers: $('#speakers').checked }) });
     current = s.id; await refreshList(); open(s.id);
   } catch (e) { alert(e.message); }
 };

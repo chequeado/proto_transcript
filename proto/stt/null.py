@@ -1,4 +1,4 @@
-"""Descarta el audio. Sirve para probar sólo la ingesta (sesiones largas sin costo de STT)."""
+"""Descarta el audio: para probar sólo la ingesta, sin costo."""
 
 
 class NullClient:

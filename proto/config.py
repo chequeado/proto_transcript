@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     ytdlp_format: str = "worstaudio/worst"
     ytdlp_extra_args: str = ""
 
-    # off | always | fallback (directo hasta que YouTube rechace: bot_check / 403 / 429)
+    # off | always | fallback
     proxy_mode: str = "off"
     webshare_user_base: str = ""
     webshare_pass: str = ""
@@ -26,7 +26,6 @@ class Settings(BaseSettings):
     webshare_sessions: int = 100
 
     stall_seconds: float = 30
-    # Si en los últimos slow_window_seconds llega menos de slow_ratio × tiempo real, se corta (motivo "slow")
     slow_ratio: float = 0.9
     slow_window_seconds: float = 120
     data_dir: Path = Path("data")
