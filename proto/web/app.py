@@ -1,0 +1,97 @@
+"""Capa web fina sobre SessionManager. Correr con: uvicorn proto.web.app:app"""
+
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+from ..config import settings
+from ..manager import SessionManager
+
+STATIC = Path(__file__).parent / "static"
+manager = SessionManager(settings)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    yield
+    await manager.stop_all()
+
+
+app = FastAPI(title="proto_transcript", lifespan=lifespan)
+
+
+class NewSession(BaseModel):
+    url: str | None = None
+    audio: str | None = None  # ruta local a un audio grabado (repetición)
+    stt: str = "assemblyai"  # uno o varios motores separados por comas
+
+
+def get_session(session_id: str):
+    session = manager.get(session_id)
+    if not session:
+        raise HTTPException(404, "sesión no encontrada")
+    return session
+
+
+@app.get("/")
+async def index():
+    return FileResponse(STATIC / "index.html")
+
+
+@app.post("/api/sessions")
+async def create_session(body: NewSession):
+    try:
+        if not body.url and not body.audio:
+            raise ValueError("falta url o audio")
+        session = manager.create(body.url, body.stt, body.audio)
+    except Exception as e:  # p.ej. falta la API key o motor desconocido
+        raise HTTPException(400, str(e))
+    return session.stats()
+
+
+@app.get("/api/sessions")
+async def list_sessions():
+    return manager.list()
+
+
+@app.get("/api/sessions/{session_id}")
+async def session_detail(session_id: str):
+    return get_session(session_id).stats()
+
+
+@app.delete("/api/sessions/{session_id}")
+async def stop_session(session_id: str):
+    session = get_session(session_id)
+    await session.stop()
+    return session.stats()
+
+
+@app.get("/api/sessions/{session_id}/transcript")
+async def transcript(session_id: str):
+    return list(get_session(session_id).finals.values())
+
+
+@app.websocket("/ws/sessions/{session_id}")
+async def session_ws(ws: WebSocket, session_id: str):
+    session = manager.get(session_id)
+    if not session:
+        await ws.close(code=4404)
+        return
+    await ws.accept()
+    q = session.subscribe()
+    try:
+        await ws.send_json({
+            "type": "history",
+            "finals": list(session.finals.values()),
+            "events": list(session.recent_events),
+            "status": session.stats(),
+        })
+        while True:
+            await ws.send_json(await q.get())
+    except WebSocketDisconnect:
+        pass
+    finally:
+        session.unsubscribe(q)

@@ -1,0 +1,16 @@
+services:
+  proto:
+    build: .
+    image: proto-transcript
+    env_file: .env
+    # init: un PID 1 que recoge los procesos hijos (yt-dlp, ffmpeg) que mueren al reiniciar la descarga
+    init: true
+    # mismo usuario que el dueño de ./data en el host (si no, los archivos quedan de root)
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+    # sólo localhost: la web no tiene login y cualquiera podría arrancar sesiones pagas.
+    # Desde afuera, por túnel SSH (ver README).
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
