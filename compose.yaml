@@ -8,9 +8,9 @@ services:
     # mismo usuario que el dueño de ./data en el host (si no, los archivos quedan de root)
     user: "${APP_UID:-1000}:${APP_GID:-1000}"
     # sólo localhost: la web no tiene login y cualquiera podría arrancar sesiones pagas.
-    # Desde afuera, por túnel SSH (ver README).
+    # Desde afuera, por túnel SSH (ver README). APP_PORT en .env si el 8000 está ocupado.
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
     volumes:
       - ./data:/app/data
     restart: unless-stopped

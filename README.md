@@ -27,7 +27,7 @@ docker compose up -d --build    # web en 127.0.0.1:8000
 docker compose logs -f          # los eventos importantes (lo mismo que se ve en la terminal)
 docker compose stop             # cierra las sesiones de AssemblyAI antes de salir
 ```
-- La web **no tiene login**: el puerto queda sólo en localhost de la VM. Para verla desde tu máquina, por túnel:
+- La web **no tiene login**: el puerto queda sólo en localhost de la VM (`APP_PORT` en `.env`, default 8000). Para verla desde tu máquina, por túnel:
   `gcloud compute ssh <vm> -- -L 8000:localhost:8000` y abrir http://localhost:8000.
 - CLI dentro del contenedor: `docker compose run --rm proto python -m proto.cli URL` (los datos quedan en `./data`).
 - yt-dlp queda en la versión del momento del build. Para actualizarlo: `docker compose build --no-cache`.
