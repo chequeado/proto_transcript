@@ -98,7 +98,7 @@
 <script>
 const PRICE_PER_HOUR = 0.45, SPEAKERS_PER_HOUR = 0.12;  // AssemblyAI universal-3-6-pro, por hora de conexión
 const $ = (s) => document.querySelector(s);
-let sessions = [], current = null, ws = null, finals = new Map();
+let sessions = [], current = null, ws = null, poller = null, finals = new Map();
 
 async function api(path, opts) {
   const r = await fetch(path, opts);
@@ -206,8 +206,24 @@ function scrollDown() {
   if (t.scrollHeight - t.scrollTop - t.clientHeight < 150) t.scrollTop = t.scrollHeight;
 }
 
+async function loadTranscript(id) {
+  const list = await api(`/api/sessions/${id}/transcript`);
+  if (id === current) { list.forEach(addFinal); scrollDown(); }
+}
+
+// sin WebSocket (p. ej. un proxy que no lo deja pasar): finales cada 3 s, sin parciales
+function poll(id) {
+  clearInterval(poller);
+  poller = setInterval(() => {
+    const s = sessions.find(x => x.id === id);
+    if (id !== current || !s || !s.running) clearInterval(poller);
+    loadTranscript(id).catch(() => {});
+  }, 3000);
+}
+
 async function select(id) {
-  if (ws) { ws.onmessage = null; ws.close(); ws = null; }
+  if (ws) { ws.onmessage = ws.onclose = null; ws.close(); ws = null; }
+  clearInterval(poller);
   current = id;
   history.replaceState(null, '', '#' + id);
   finals = new Map();
@@ -226,8 +242,9 @@ async function select(id) {
       else if (msg.type === 'status') refresh();
       scrollDown();
     };
+    ws.onclose = () => { if (id === current) { ws = null; loadTranscript(id).catch(() => {}); poll(id); } };
   } else {
-    (await api(`/api/sessions/${id}/transcript`)).forEach(addFinal);
+    await loadTranscript(id);
     if (!finals.size) $('#text').replaceChildren(el('p', 'empty', 'Sin texto.'));
   }
 }
