@@ -3,77 +3,102 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>proto_transcript</title>
+<title>Transcriptor en vivo</title>
 <style>
   :root {
-    --bg: #fafaf9; --panel: #ffffff; --fg: #1c1917; --muted: #78716c; --line: #e7e5e4;
-    --accent: #2563eb; --ok: #16a34a; --warn: #d97706; --bad: #dc2626;
-    font-family: system-ui, sans-serif; color-scheme: light dark;
+    --bg: #f6f6f4; --panel: #ffffff; --fg: #1c1917; --muted: #6b6560; --line: #e4e2df;
+    --accent: #2563eb; --accent-fg: #ffffff; --ok: #15803d; --warn: #b45309; --bad: #b91c1c;
+    color-scheme: light;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg: #0c0a09; --panel: #1c1917; --fg: #e7e5e4; --muted: #a8a29e; --line: #292524; }
+    :root:not([data-theme="light"]) {
+      --bg: #0f0e0d; --panel: #1a1917; --fg: #ebe9e6; --muted: #a39e98; --line: #2c2a27;
+      --accent: #3b82f6; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; color-scheme: dark;
+    }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--fg); }
-  header { display: flex; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); flex-wrap: wrap; align-items: center; }
-  header h1 { font-size: 15px; margin: 0 12px 0 0; }
-  input, select, button { font: inherit; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); }
-  input[type=url] { flex: 1; min-width: 240px; }
-  #keyterms { flex: 1; min-width: 200px; }
-  #prompt { flex: 2; min-width: 280px; }
-  .col .spk { font-weight: 600; color: var(--accent); margin-right: 6px; }
-  button { cursor: pointer; }
-  button.primary { background: var(--accent); color: white; border-color: var(--accent); }
-  main { display: grid; grid-template-columns: 1fr 360px; gap: 16px; padding: 16px; height: calc(100vh - 60px); }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; overflow: auto; min-height: 0; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
-  #columns { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: 16px; }
-  @media (max-width: 900px) { #columns { grid-auto-flow: row; } }
-  .col h3 { font-size: 13px; margin: 0 0 8px; color: var(--accent); }
-  .col p { margin: 0 0 10px; line-height: 1.5; }
-  .col time { color: var(--muted); font-size: 12px; margin-right: 8px; font-variant-numeric: tabular-nums; }
-  .col .partial { color: var(--muted); font-style: italic; }
-  .engines { display: flex; gap: 10px; font-size: 14px; }
-  aside { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
-  #status { font-size: 13px; }
-  #status dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0; }
-  #status dt { color: var(--muted); }
-  #status dd { margin: 0; overflow-wrap: anywhere; }
-  #events { flex: 1; font: 12px ui-monospace, monospace; }
-  #events div { white-space: pre-wrap; padding: 2px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
-  .k-ingest_exit, .k-stt_error, .k-stt_fatal, .k-stt_closed { color: var(--bad); }
-  .k-ingest_first_audio, .k-stt_begin, .k-stt_language { color: var(--ok); }
-  .k-heartbeat { color: var(--muted); }
-  .k-ingest_restart_wait, .k-stt_reconnect_wait, .k-stt_warning { color: var(--warn); }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
+  header { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+  h1 { font-size: 17px; margin: 0; }
+  main { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 16px; padding: 16px;
+         height: calc(100vh - 53px); }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; height: auto; } #list { max-height: 360px; } }
+  .col { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 12px; }
+  label { display: block; font-weight: 600; font-size: 14px; margin: 12px 0 4px; }
+  label:first-of-type { margin-top: 0; }
+  .hint { font-weight: 400; color: var(--muted); font-size: 13px; }
+  input[type=url], input[type=text], textarea {
+    width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--fg);
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  .check { display: flex; gap: 8px; align-items: center; font-weight: 400; margin-top: 12px; }
+  button { font: inherit; padding: 7px 14px; border: 1px solid var(--line); border-radius: 6px;
+           background: var(--panel); color: var(--fg); cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); width: 100%;
+                   margin-top: 14px; padding: 9px; font-weight: 600; }
+  button.danger { color: var(--bad); }
+  .error { color: var(--bad); font-size: 14px; margin-top: 8px; min-height: 1em; }
+  #list { flex: 1; overflow: auto; min-height: 120px; }
+  .item { padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .item:first-of-type { border-top: 0; }
+  .item.selected .url { color: var(--accent); }
+  .item .url { font-size: 14px; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .status { font-size: 13px; font-weight: 600; }
+  .s-ok { color: var(--ok); } .s-warn { color: var(--warn); } .s-bad { color: var(--bad); } .s-off { color: var(--muted); }
+  #viewer { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  #viewer-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;
+                 padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  #viewer-title { font-weight: 600; overflow-wrap: anywhere; }
+  .actions { display: flex; gap: 8px; }
+  #text { flex: 1; overflow: auto; padding-top: 12px; min-height: 200px; }
+  #text p { margin: 0 0 12px; }
+  #text time { color: var(--muted); font-size: 12px; margin-right: 8px; font-variant-numeric: tabular-nums; }
+  #text .spk { font-weight: 700; color: var(--accent); margin-right: 6px; }
+  #text .partial { color: var(--muted); font-style: italic; }
+  .empty { color: var(--muted); }
 </style>
 </head>
 <body>
-<header>
-  <h1>proto_transcript</h1>
-  <input id="url" type="url" placeholder="URL del vivo (YouTube u otro)">
-  <span class="engines">
-    <label><input type="checkbox" name="stt" value="assemblyai" checked> AssemblyAI</label>
-    <label><input type="checkbox" name="stt" value="null"> null</label>
-    <label title="+US$0,12/h"><input type="checkbox" id="speakers"> separar hablantes</label>
-  </span>
-  <input id="prompt" type="text" placeholder="contexto (opcional): Entrevista radial con un dirigente peronista sobre Milei y política nuclear">
-  <input id="keyterms" type="text" placeholder="keyterms (opcional): Milei, ARSAT, Pilcaniyeu">
-
-  <button class="primary" id="start">Empezar</button>
-  <select id="sessions"><option value="">— sesiones —</option></select>
-  <button id="stop">Parar</button>
-</header>
+<header><h1>Transcriptor en vivo</h1></header>
 <main>
-  <section id="transcript"><h2>Transcripción</h2><div id="columns"></div></section>
-  <aside>
-    <section id="status"><h2>Estado</h2><dl></dl></section>
-    <section id="events"><h2>Eventos</h2><div id="eventlist"></div></section>
-  </aside>
+  <div class="col">
+    <section>
+      <h2>Nueva transcripción</h2>
+      <label for="url">URL del vivo</label>
+      <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=…" required>
+      <label for="prompt">Contexto <span class="hint">· opcional</span></label>
+      <textarea id="prompt" placeholder="De qué trata y quiénes hablan. Ej.: Debate presidencial argentino entre X e Y, moderado por Z."></textarea>
+      <label for="keyterms">Palabras clave <span class="hint">· opcional, separadas por coma (máx. 100)</span></label>
+      <input id="keyterms" type="text" placeholder="Milei, ARSAT, Pilcaniyeu">
+      <label class="check"><input id="speakers" type="checkbox"> Separar quién habla <span class="hint">(+US$0,12/h)</span></label>
+      <button class="primary" id="start">Empezar</button>
+      <div class="error" id="form-error"></div>
+    </section>
+    <section id="list"><h2>Transcripciones</h2><div id="items"></div></section>
+  </div>
+  <section id="viewer">
+    <div id="viewer-head">
+      <div>
+        <div id="viewer-title" class="empty">Elegí una transcripción de la lista o empezá una nueva.</div>
+        <div id="viewer-status" class="meta"></div>
+      </div>
+      <div class="actions">
+        <button id="download" disabled>Descargar .txt</button>
+        <button id="stop" class="danger" disabled>Detener</button>
+      </div>
+    </div>
+    <div id="text"></div>
+  </section>
 </main>
 <script>
+const PRICE_PER_HOUR = 0.45, SPEAKERS_PER_HOUR = 0.12;  // AssemblyAI universal-3-6-pro, por hora de conexión
 const $ = (s) => document.querySelector(s);
-let ws = null, current = null, pollTimer = null;
+let sessions = [], current = null, ws = null, finals = new Map();
 
 async function api(path, opts) {
   const r = await fetch(path, opts);
@@ -82,117 +107,178 @@ async function api(path, opts) {
   return body;
 }
 
-async function refreshList() {
-  const list = await api('/api/sessions');
-  const sel = $('#sessions');
-  sel.innerHTML = '<option value="">— sesiones —</option>' + list.map(s =>
-    `<option value="${s.id}">${s.running ? '● ' : ''}${s.id} (${s.stt})</option>`).join('');
-  if (current) sel.value = current;
-}
-
-function renderStatus(s) {
-  const fmt = (v) => typeof v === 'object' && v !== null ? JSON.stringify(v) : v;
-  const keys = ['running', 'prompt', 'keyterms', 'speakers', 'ingest_state', 'ended_reason', 'error', 'video_url', 'wall_s', 'audio_s', 'coverage', 'speed',
-                'proxy_mode', 'proxy', 'runs', 'exit_reasons', 'last_audio_ago_s', 'finals', 'stt_queue', 'engines'];
-  $('#status dl').innerHTML = keys.map(k => `<dt>${k}</dt><dd>${fmt(s[k]) ?? '—'}</dd>`).join('');
-}
-
-function column(engine) {
-  let col = document.getElementById('col-' + engine);
-  if (!col) {
-    col = document.createElement('div');
-    col.className = 'col';
-    col.id = 'col-' + engine;
-    col.innerHTML = `<h3>${engine}</h3><div class="finals"></div><p class="partial"></p>`;
-    $('#columns').appendChild(col);
+function status(s) {
+  const err = s.error || (s.engines && Object.values(s.engines).map(e => e.error).find(Boolean));
+  if (s.running) {
+    if (err) return ['Error: ' + err, 's-bad'];
+    return { starting: ['Conectando…', 's-warn'], streaming: ['Transcribiendo', 's-ok'],
+             waiting: ['Reconectando…', 's-warn'] }[s.ingest_state] || ['En curso', 's-ok'];
   }
-  return col;
+  if (err) return ['Error: ' + err, 's-bad'];
+  return s.ended_reason === 'ended' ? ['Terminó el vivo', 's-off'] : ['Detenida', 's-off'];
+}
+
+function seconds(s) {
+  return s.running ? (Date.now() - Date.parse(s.started_at)) / 1000 : (s.wall_s || 0);
+}
+
+function duration(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60);
+  return h ? `${h} h ${m} min` : `${m} min`;
+}
+
+function cost(s) {
+  return seconds(s) / 3600 * (PRICE_PER_HOUR + (s.speakers ? SPEAKERS_PER_HOUR : 0));
+}
+
+function usage(s) {
+  if (!s.running && s.wall_s == null) return '';
+  return ` · ${duration(seconds(s))} · ≈ US$${cost(s).toFixed(2)}`;
+}
+
+function when(iso) {
+  return new Date(iso).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function renderList() {
+  const box = $('#items');
+  box.replaceChildren();
+  const visible = sessions.filter(s => s.stt !== 'null');
+  if (!visible.length) box.append(el('div', 'empty', 'Todavía no hay transcripciones.'));
+  for (const s of visible) {
+    const [label, cls] = status(s);
+    const item = el('div', 'item' + (s.id === current ? ' selected' : ''));
+    item.append(el('div', 'status ' + cls, label), el('div', 'url', s.url),
+                el('div', 'meta', when(s.started_at) + usage(s)));
+    item.onclick = () => {
+      select(s.id);
+      if (matchMedia('(max-width: 860px)').matches) $('#viewer').scrollIntoView({ behavior: 'smooth' });
+    };
+    box.append(item);
+  }
+}
+
+function renderHead() {
+  const s = sessions.find(x => x.id === current);
+  if (!s) return;
+  const [label, cls] = status(s);
+  $('#viewer-title').className = '';
+  $('#viewer-title').textContent = s.url;
+  const st = $('#viewer-status');
+  st.replaceChildren(el('span', 'status ' + cls, label), document.createTextNode(usage(s)));
+  $('#stop').disabled = !s.running;
+  $('#download').disabled = false;
+}
+
+async function refresh() {
+  try { sessions = await api('/api/sessions'); } catch { return; }
+  renderList();
+  renderHead();
 }
 
 function addFinal(f) {
-  const col = column(f.engine);
-  const id = 'f-' + f.engine + '-' + f.key;
-  let p = document.getElementById(id);
+  if (f.engine && f.engine !== 'assemblyai') return;
+  finals.set(f.key, f);
+  let p = document.getElementById('f-' + f.key);
   if (!p) {
-    p = document.createElement('p');
-    p.id = id;
-    col.querySelector('.finals').appendChild(p);
+    p = el('p');
+    p.id = 'f-' + f.key;
+    $('#text').insertBefore(p, $('#text .partial'));
   }
-  col.querySelector('.partial').textContent = '';
-  const t = new Date(f.ts).toLocaleTimeString();
-  p.innerHTML = `<time>${t}</time>`;
+  p.replaceChildren(el('time', null, new Date(f.ts).toLocaleTimeString()));
   const segments = (f.extra || {}).segments;
-  if (!segments) { p.appendChild(document.createTextNode(f.text)); return; }
+  if (!segments) { p.append(f.text); return; }
   segments.forEach((s, i) => {
-    if (i) p.appendChild(document.createElement('br'));
-    const spk = document.createElement('span');
-    spk.className = 'spk';
-    spk.textContent = s.speaker;
-    p.append(spk, document.createTextNode(s.text));
+    if (i) p.append(el('br'));
+    p.append(el('span', 'spk', s.speaker), s.text);
   });
 }
 
-function addEvent(e) {
-  if (!e.msg) return;
-  const d = document.createElement('div');
-  d.className = 'k-' + e.kind;
-  d.textContent = `${new Date(e.ts).toLocaleTimeString()} ${e.msg.trim()}`;
-  const list = $('#eventlist');
-  list.prepend(d);
-  while (list.children.length > 300) list.lastChild.remove();
-}
-
 function scrollDown() {
-  const sec = $('#transcript');
-  if (sec.scrollHeight - sec.scrollTop - sec.clientHeight < 120) sec.scrollTop = sec.scrollHeight;
+  const t = $('#text');
+  if (t.scrollHeight - t.scrollTop - t.clientHeight < 150) t.scrollTop = t.scrollHeight;
 }
 
-function open(id) {
-  if (ws) ws.close();
-  clearInterval(pollTimer);
+async function select(id) {
+  if (ws) { ws.onmessage = null; ws.close(); ws = null; }
   current = id;
-  $('#columns').innerHTML = ''; $('#eventlist').innerHTML = '';
-  if (!id) return;
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws/sessions/${id}`);
-  ws.onmessage = (m) => {
-    const msg = JSON.parse(m.data);
-    if (msg.type === 'history') {
-      msg.status.stt.split(',').filter(e => e !== 'null').forEach(column);
-      msg.finals.forEach(addFinal); msg.events.forEach(addEvent); renderStatus(msg.status);
-    } else if (msg.type === 'partial') {
-      column(msg.engine).querySelector('.partial').textContent = msg.text;
-    } else if (msg.type === 'final') {
-      addFinal(msg);
-    } else if (msg.type === 'event') {
-      addEvent(msg.event);
-    } else if (msg.type === 'status') {
-      renderStatus(msg.status); refreshList();
-    }
-    scrollDown();
-  };
-  pollTimer = setInterval(async () => renderStatus(await api(`/api/sessions/${id}`)), 5000);
+  history.replaceState(null, '', '#' + id);
+  finals = new Map();
+  $('#text').replaceChildren(el('p', 'partial'));
+  renderList();
+  renderHead();
+  const s = sessions.find(x => x.id === id);
+  if (s && s.running) {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws/sessions/${id}`);
+    ws.onmessage = (m) => {
+      const msg = JSON.parse(m.data);
+      if (msg.type === 'history') msg.finals.forEach(addFinal);
+      else if (msg.type === 'final') { addFinal(msg); $('#text .partial').textContent = ''; }
+      else if (msg.type === 'partial' && msg.engine === 'assemblyai') $('#text .partial').textContent = msg.text;
+      else if (msg.type === 'status') refresh();
+      scrollDown();
+    };
+  } else {
+    (await api(`/api/sessions/${id}/transcript`)).forEach(addFinal);
+    if (!finals.size) $('#text').replaceChildren(el('p', 'empty', 'Sin texto.'));
+  }
 }
 
 $('#start').onclick = async () => {
   const url = $('#url').value.trim();
-  if (!url) return;
+  $('#form-error').textContent = '';
+  if (!url) { $('#form-error').textContent = 'Falta la URL.'; return; }
+  $('#start').disabled = true;
   try {
-    const s = await api('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                           body: JSON.stringify({ url, stt: [...document.querySelectorAll('input[name=stt]:checked')].map(c => c.value).join(','),
-                                                                  prompt: $('#prompt').value, keyterms: $('#keyterms').value,
-                                                                  speakers: $('#speakers').checked }) });
-    current = s.id; await refreshList(); open(s.id);
-  } catch (e) { alert(e.message); }
+    const s = await api('/api/sessions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, stt: 'assemblyai', prompt: $('#prompt').value, keyterms: $('#keyterms').value,
+                             speakers: $('#speakers').checked }),
+    });
+    $('#url').value = '';
+    await refresh();
+    select(s.id);
+  } catch (e) {
+    $('#form-error').textContent = e.message;
+  } finally {
+    $('#start').disabled = false;
+  }
 };
+
 $('#stop').onclick = async () => {
-  if (!current) return;
+  if (!current || !confirm('¿Detener esta transcripción? No se puede retomar: habría que empezar una nueva.')) return;
   $('#stop').disabled = true;
-  try { renderStatus(await api(`/api/sessions/${current}`, { method: 'DELETE' })); await refreshList(); }
-  finally { $('#stop').disabled = false; }
+  try { await api(`/api/sessions/${current}`, { method: 'DELETE' }); } catch (e) { alert(e.message); }
+  await refresh();
 };
-$('#sessions').onchange = (e) => open(e.target.value);
-refreshList();
+
+$('#download').onclick = () => {
+  const s = sessions.find(x => x.id === current);
+  if (!s) return;
+  const lines = [s.url, 'Inicio: ' + new Date(s.started_at).toLocaleString(), ''];
+  for (const f of finals.values()) {
+    const t = new Date(f.ts).toLocaleTimeString();
+    const segments = (f.extra || {}).segments;
+    if (segments) segments.forEach(x => lines.push(`[${t}] ${x.speaker}: ${x.text}`));
+    else lines.push(`[${t}] ${f.text}`);
+  }
+  const a = el('a');
+  a.href = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/plain;charset=utf-8' }));
+  a.download = `transcripcion-${s.id}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+refresh().then(() => { if (location.hash.length > 1) select(location.hash.slice(1)); });
+setInterval(refresh, 5000);
 </script>
 </body>
 </html>

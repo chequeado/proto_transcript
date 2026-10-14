@@ -44,11 +44,18 @@ async def index():
     return FileResponse(STATIC / "index.html")
 
 
+@app.get("/dev")
+async def dev():
+    return FileResponse(STATIC / "dev.html")
+
+
 @app.post("/api/sessions")
 async def create_session(body: NewSession):
     try:
         if not body.url and not body.audio:
             raise ValueError("falta url o audio")
+        if body.audio and not Path(body.audio).resolve().is_relative_to(settings.data_dir.resolve()):
+            raise ValueError("el audio tiene que estar dentro de data/")
         session = manager.create(body.url, body.stt, body.audio, keyterms=body.keyterms, speakers=body.speakers,
                                  prompt=body.prompt)
     except Exception as e:
@@ -63,7 +70,10 @@ async def list_sessions():
 
 @app.get("/api/sessions/{session_id}")
 async def session_detail(session_id: str):
-    return get_session(session_id).stats()
+    summary = manager.summary(session_id)
+    if summary is None:
+        raise HTTPException(404, "sesión no encontrada")
+    return summary
 
 
 @app.delete("/api/sessions/{session_id}")
@@ -75,7 +85,10 @@ async def stop_session(session_id: str):
 
 @app.get("/api/sessions/{session_id}/transcript")
 async def transcript(session_id: str):
-    return list(get_session(session_id).finals.values())
+    finals = manager.transcript(session_id)
+    if finals is None:
+        raise HTTPException(404, "sesión no encontrada")
+    return finals
 
 
 @app.websocket("/ws/sessions/{session_id}")

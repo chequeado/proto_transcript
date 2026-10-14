@@ -71,13 +71,17 @@ class Session:
 
     def start(self) -> None:
         s = self.settings
-        (self.dir / "meta.json").write_text(json.dumps({
+        self.meta = {
             "id": self.id, "url": self.url, "stt": self.stt_name, "sample_rate": SAMPLE_RATE,
             "started_at": datetime.fromtimestamp(self.started_at, timezone.utc).isoformat(),
             "models": {"assemblyai": s.assemblyai_model},
             "language": s.stt_language, "prompt": self.prompt, "keyterms": self.keyterms, "speakers": self.speakers,
-        }, indent=2, ensure_ascii=False))
+        }
+        self._write_meta()
         self._task = asyncio.create_task(self._run())
+
+    def _write_meta(self) -> None:
+        (self.dir / "meta.json").write_text(json.dumps(self.meta, indent=2, ensure_ascii=False))
 
     async def stop(self) -> None:
         self.source.stop()
@@ -117,7 +121,11 @@ class Session:
             if audio_fh:
                 audio_fh.close()
             self.ended_at = time.time()
-            self.log("session_end", ingest_state=self.source.state, stats=self.stats())
+            stats = self.stats()
+            self.meta["ended"] = {k: stats[k] for k in ("ingest_state", "ended_reason", "error", "wall_s", "finals",
+                                                        "cuts", "engines")}
+            self._write_meta()
+            self.log("session_end", ingest_state=self.source.state, stats=stats)
             self._transcript_fh.close()
             self._publish({"type": "status", "status": self.stats()})
             self.log.close()
