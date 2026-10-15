@@ -33,6 +33,7 @@ class NewSession(BaseModel):
     speakers: bool = False
     source: Literal["youtube", "radio"] = "youtube"
     max_minutes: int | None = None  # radio: obligatorio
+    languages: str | list[str] | None = None  # vacío = automático
 
 
 def get_session(session_id: str):
@@ -65,7 +66,8 @@ async def create_session(body: NewSession):
         if body.audio and not Path(body.audio).resolve().is_relative_to(settings.data_dir.resolve()):
             raise ValueError("el audio tiene que estar dentro de data/")
         session = manager.create(body.url, body.stt, body.audio, keyterms=body.keyterms, speakers=body.speakers,
-                                 prompt=body.prompt, source=body.source, max_minutes=body.max_minutes)
+                                 prompt=body.prompt, source=body.source, max_minutes=body.max_minutes,
+                                 languages=body.languages)
     except Exception as e:
         raise HTTPException(400, str(e))
     return session.stats()

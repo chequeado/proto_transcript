@@ -6,8 +6,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    stt_language: str = "es"
-
     assemblyai_api_key: str = ""
     assemblyai_model: str = "universal-3-6-pro"
 

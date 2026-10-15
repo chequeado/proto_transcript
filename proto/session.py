@@ -14,7 +14,7 @@ from .events import EventLog
 from .ingest import AudioSource
 from .radio import RadioSource
 from .replay import FileSource
-from .stt.assemblyai import clean_keyterms
+from .stt.assemblyai import clean_keyterms, clean_languages
 from .stt.base import Result, make_stt
 
 BROADCAST_SKIP = {"ytdlp_stderr", "ffmpeg_stderr"}
@@ -40,7 +40,7 @@ class Session:
     def __init__(self, url: str | None, stt: str, settings: Settings, verbose: bool = False,
                  audio_file: str | None = None, keyterms: str | list[str] | None = None, speakers: bool = False,
                  prompt: str = "", source: str = "youtube", max_minutes: int | None = None,
-                 languages: list[str] | None = None):
+                 languages: str | list[str] | None = None):
         self.keyterms = clean_keyterms(keyterms)
         self.speakers = speakers
         self.prompt = (prompt or "").strip()
@@ -50,9 +50,8 @@ class Session:
         if source == "radio":
             if not max_minutes or not 1 <= max_minutes <= MAX_RADIO_MINUTES:
                 raise ValueError(f"una radio necesita hora de fin (entre 1 min y {MAX_RADIO_MINUTES // 60} h)")
-            languages = languages or ["ca", "es"]
             self.ends_at = datetime.now(timezone.utc) + timedelta(minutes=max_minutes)
-        self.languages = languages
+        self.languages = clean_languages(languages)
         self.id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
         self.settings = settings
         self.dir = settings.data_dir / "sessions" / self.id
@@ -72,7 +71,7 @@ class Session:
         names = [n.strip() for n in stt.split(",") if n.strip()]
         self.stt_name = ",".join(names)
         self.engines = {n: Engine(n, make_stt(n, settings, self.log, keyterms=self.keyterms, speakers=speakers,
-                                                prompt=self.prompt, languages=languages))
+                                                prompt=self.prompt, languages=self.languages))
                         for n in names}
 
         self.finals: dict[str, dict] = {}
@@ -90,7 +89,7 @@ class Session:
             "id": self.id, "url": self.url, "stt": self.stt_name, "sample_rate": SAMPLE_RATE,
             "started_at": datetime.fromtimestamp(self.started_at, timezone.utc).isoformat(),
             "models": {"assemblyai": s.assemblyai_model},
-            "language": s.stt_language, "languages": self.languages, "source": self.kind,
+            "languages": self.languages, "source": self.kind,
             "max_minutes": self.max_minutes, "ends_at": self._ends_at_iso(),
             "prompt": self.prompt, "keyterms": self.keyterms, "speakers": self.speakers,
         }
@@ -219,6 +218,7 @@ class Session:
             "video_url": src.url,
             "stt": self.stt_name,
             "source": self.kind,
+            "languages": self.languages,
             "ends_at": self._ends_at_iso(),
             "prompt": self.prompt,
             "keyterms": self.keyterms,

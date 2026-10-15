@@ -33,7 +33,7 @@
   label { display: block; font-weight: 600; font-size: 14px; margin: 12px 0 4px; }
   label:first-of-type { margin-top: 0; }
   .hint { font-weight: 400; color: var(--muted); font-size: 13px; }
-  input[type=url], input[type=text], textarea {
+  input[type=url], input[type=text], textarea, select {
     width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
     background: var(--bg); color: var(--fg);
   }
@@ -77,11 +77,17 @@
       <input id="url" type="url" value="https://shoutcast.ccma.cat/ccma/catalunyaradioHD.mp3" required>
       <label for="until">Cortar a las <span class="hint">· obligatorio, máx. 12 h</span></label>
       <input id="until" type="time" required>
-      <div class="hint">Idioma: catalán + español</div>
       <label for="prompt">Contexto <span class="hint">· opcional</span></label>
       <textarea id="prompt" placeholder="De qué trata y quiénes hablan. Ej.: Magacín matinal de Catalunya Ràdio con entrevistas sobre política catalana."></textarea>
       <label for="keyterms">Palabras clave <span class="hint">· opcional, separadas por coma (máx. 100)</span></label>
       <input id="keyterms" type="text" placeholder="Generalitat, Parlament, Illa">
+      <label for="languages">Idioma <span class="hint">· opcional</span></label>
+      <select id="languages">
+        <option value="">Automático</option>
+        <option value="es">Español</option>
+        <option value="es,ca">Español + Català</option>
+        <option value="en">English</option>
+      </select>
       <label class="check"><input id="speakers" type="checkbox"> Separar quién habla <span class="hint">(+US$0,12/h)</span></label>
       <button class="primary" id="start">Empezar</button>
       <div class="error" id="form-error"></div>
@@ -279,7 +285,7 @@ $('#start').onclick = async () => {
     const s = await api('/api/sessions', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url, stt: 'assemblyai', source: 'radio', max_minutes, prompt: $('#prompt').value,
-                             keyterms: $('#keyterms').value, speakers: $('#speakers').checked }),
+                             keyterms: $('#keyterms').value, languages: $('#languages').value, speakers: $('#speakers').checked }),
     });
     await refresh();
     select(s.id);

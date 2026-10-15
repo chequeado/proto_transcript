@@ -66,7 +66,8 @@ def human(e: dict) -> str | None:
         return f"■ el vivo terminó · {(e.get('detail') or '')[:150]}"
     if k == "stt_begin":
         conn = f" (conexión #{e['ws_session']})" if e.get("ws_session") else ""
-        opts = ((" · con prompt" if e.get("prompt") else "") + (f" · {e['keyterms']} keyterms" if e.get("keyterms") else "")
+        opts = ((f" · idioma {'+'.join(e['languages'])}" if e.get("languages") else " · idioma automático")
+                + (" · con prompt" if e.get("prompt") else "") + (f" · {e['keyterms']} keyterms" if e.get("keyterms") else "")
                 + (" · hablantes" if e.get("speakers") else ""))
         return f"  {stt}: conectado · modelo {e.get('model') or '?'}{opts}{conn}"
     if k == "stt_language":

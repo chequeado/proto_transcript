@@ -45,7 +45,7 @@ Shoutcast o HLS, por ejemplo `https://shoutcast.ccma.cat/ccma/catalunyaradioHD.m
 - **Corte obligatorio** con una hora de fin, como máximo a 12 h. Una radio nunca "termina", así que sin corte
   cobraría para siempre.
 - **El supervisor es el mismo** (`stall`, `slow`, reinicio con espera), pero nunca da el vivo por terminado.
-- **Idioma: catalán + español** (`language_codes=["ca","es"]`). YouTube sigue con `STT_LANGUAGE`.
+- **Idioma:** opcional, igual que en YouTube (ver Notas).
 - **Probadas (15/10), solo descarga:** Catalunya Ràdio, Radio Nacional (Icecast), Mitre (StreamTheWorld) y Radio 10 (HLS).
 
 ## Setup
@@ -176,5 +176,6 @@ La duración de la sesión se configura en el panel (Proxy Settings → Session 
   unos segundos de audio anteriores de golpe.
 - YouTube ofrece hoy formatos HLS sólo de audio para vivos (233/234), así que `bestaudio` no baja video.
 - No usa cookies si `YT_COOKIES_FILE` está vacío.
-- Para el idioma, `language_codes` se manda como JSON (`["es"]`) en la query y `language_detection=true`;
-  el idioma detectado sale en cada turno (`language`).
+- **Idioma** (opcional, por sesión): Automático (no manda `language_codes`; el modelo detecta y alterna idiomas),
+  Español, Español + Català o English (`--languages es,ca`). Con un solo idioma se fuerza todo a ese idioma.
+  `language_detection=true` sólo informa el idioma de cada turno.

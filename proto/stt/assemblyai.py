@@ -6,6 +6,7 @@ Con speaker_labels un turno no se corta al cambiar de hablante; se divide acá c
 
 import asyncio
 import json
+import re
 from urllib.parse import urlencode
 
 from ..audio import SAMPLE_RATE
@@ -28,6 +29,18 @@ def clean_keyterms(raw: str | list[str] | None) -> list[str]:
     if len(terms) > MAX_KEYTERMS:
         raise ValueError(f"{len(terms)} keyterms: el máximo es {MAX_KEYTERMS}")
     return terms
+
+
+def clean_languages(raw: str | list[str] | None) -> list[str]:
+    """'es,ca' o lista -> ['es', 'ca']. Vacío = automático (no se manda language_codes)."""
+    if not raw:
+        return []
+    items = raw if isinstance(raw, list) else raw.split(",")
+    langs = list(dict.fromkeys(x.strip().lower() for x in items if x.strip()))
+    bad = [x for x in langs if not re.fullmatch(r"[a-z]{2,3}", x)]
+    if bad or len(langs) > 5:
+        raise ValueError(f"idiomas inválidos: {', '.join(bad) or len(langs)}")
+    return langs
 
 
 def speaker_segments(words: list[dict]) -> list[dict]:
@@ -55,9 +68,7 @@ class AssemblyAIClient(WebSocketSTT):
             raise FatalSTTError("falta ASSEMBLYAI_API_KEY en .env")
         self.key = settings.assemblyai_api_key
         self.model = settings.assemblyai_model
-        if languages is None:
-            languages = [settings.stt_language] if settings.stt_language else []
-        self.languages = languages
+        self.languages = languages or []
         self.keyterms = keyterms or []
         self.speakers = speakers
         self.prompt = (prompt or "").strip()
@@ -118,7 +129,8 @@ class AssemblyAIClient(WebSocketSTT):
         elif kind == "Begin":
             cfg = msg.get("configuration") or {}
             self.log("stt_begin", ws_session=n, id=msg.get("id"), model=cfg.get("model"), configuration=cfg,
-                     keyterms=len(self.keyterms), speakers=self.speakers, prompt=bool(self.prompt))
+                     keyterms=len(self.keyterms), speakers=self.speakers, prompt=bool(self.prompt),
+                     languages=self.languages)
             if cfg.get("model") and cfg["model"] != self.model:
                 self.log("stt_warning", warning=f"modelo pedido {self.model}, el server usa {cfg['model']}")
         elif kind == "SpeakerRevision":
