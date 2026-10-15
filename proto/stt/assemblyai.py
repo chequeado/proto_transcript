@@ -43,17 +43,23 @@ def clean_languages(raw: str | list[str] | None) -> list[str]:
     return langs
 
 
-def speaker_segments(words: list[dict]) -> list[dict]:
-    """-> [{speaker, text}] por tramo consecutivo. PENDING (no atribuido) se pega al tramo en curso."""
+def speaker_segments(words: list[dict], fallback: str | None = None) -> list[dict]:
+    """-> [{speaker, text, parts: [{text, pending}]}] por tramo consecutivo. Las palabras PENDING (el modelo no
+    supo de quién son: suelen ser interjecciones cortas) quedan en el tramo en curso, marcadas en `parts`."""
+    known = [w["speaker"] for w in words if w.get("speaker") not in (None, "PENDING")]
+    first = known[0] if known else (fallback if fallback not in (None, "PENDING") else "?")
     segments: list[dict] = []
     for w in words:
-        spk = w.get("speaker")
-        if spk in (None, "PENDING") and segments:
-            spk = segments[-1]["speaker"]
-        if segments and segments[-1]["speaker"] == spk:
-            segments[-1]["text"] += " " + w["text"]
+        pending = w.get("speaker") in (None, "PENDING")
+        spk = (segments[-1]["speaker"] if segments else first) if pending else w["speaker"]
+        if not segments or segments[-1]["speaker"] != spk:
+            segments.append({"speaker": spk, "text": "", "parts": []})
+        seg = segments[-1]
+        seg["text"] = f"{seg['text']} {w['text']}".strip()
+        if seg["parts"] and seg["parts"][-1]["pending"] == pending:
+            seg["parts"][-1]["text"] += " " + w["text"]
         else:
-            segments.append({"speaker": spk or "?", "text": w["text"]})
+            seg["parts"].append({"text": w["text"], "pending": pending})
     return segments
 
 
@@ -117,7 +123,7 @@ class AssemblyAIClient(WebSocketSTT):
                      "eot_conf": msg.get("end_of_turn_confidence")}
             if self.speakers and final:
                 extra["speaker"] = msg.get("speaker_label")
-                extra["segments"] = speaker_segments(words)
+                extra["segments"] = speaker_segments(words, msg.get("speaker_label"))
             on_result(Result(
                 key=f"{n}-{msg.get('turn_order')}",
                 text=msg.get("transcript", ""),

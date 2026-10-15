@@ -63,7 +63,7 @@
   #text p { margin: 0 0 12px; }
   #text time { color: var(--muted); font-size: 12px; margin-right: 8px; font-variant-numeric: tabular-nums; }
   #text .spk { font-weight: 700; color: var(--accent); margin-right: 6px; }
-  #text .partial { color: var(--muted); font-style: italic; }
+  #text .partial, #text .pending { color: var(--muted); font-style: italic; }
   .empty { color: var(--muted); }
 </style>
 </head>
@@ -221,7 +221,11 @@ function addFinal(f) {
   if (!segments) { p.append(f.text); return; }
   segments.forEach((s, i) => {
     if (i) p.append(el('br'));
-    p.append(el('span', 'spk', s.speaker), s.text);
+    p.append(el('span', 'spk', s.speaker));
+    (s.parts || [{ text: s.text }]).forEach((x, j) => {
+      if (j) p.append(' ');
+      p.append(x.pending ? el('span', 'pending', x.text) : x.text);
+    });
   });
 }
 

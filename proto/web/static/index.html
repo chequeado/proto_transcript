@@ -61,7 +61,7 @@
   #text p { margin: 0 0 12px; }
   #text time { color: var(--muted); font-size: 12px; margin-right: 8px; font-variant-numeric: tabular-nums; }
   #text .spk { font-weight: 700; color: var(--accent); margin-right: 6px; }
-  #text .partial { color: var(--muted); font-style: italic; }
+  #text .partial, #text .pending { color: var(--muted); font-style: italic; }
   .empty { color: var(--muted); }
 </style>
 </head>
@@ -76,7 +76,7 @@
       <label for="prompt">Contexto <span class="hint">· opcional</span></label>
       <textarea id="prompt" placeholder="De qué trata y quiénes hablan. Ej.: Debate presidencial argentino entre X e Y, moderado por Z."></textarea>
       <label for="keyterms">Palabras clave <span class="hint">· opcional, separadas por coma (máx. 100)</span></label>
-      <input id="keyterms" type="text" placeholder="Milei, ARSAT, Pilcaniyeu">
+      <input id="keyterms" type="text" placeholder="Kirchner, ARSAT, Pilcaniyeu">
       <label for="languages">Idioma <span class="hint">· opcional</span></label>
       <select id="languages">
         <option value="">Automático</option>
@@ -206,7 +206,11 @@ function addFinal(f) {
   if (!segments) { p.append(f.text); return; }
   segments.forEach((s, i) => {
     if (i) p.append(el('br'));
-    p.append(el('span', 'spk', s.speaker), s.text);
+    p.append(el('span', 'spk', s.speaker));
+    (s.parts || [{ text: s.text }]).forEach((x, j) => {
+      if (j) p.append(' ');
+      p.append(x.pending ? el('span', 'pending', x.text) : x.text);
+    });
   });
 }
 
