@@ -26,6 +26,8 @@ Completar en `.env`:
 El resto de las variables ya tiene valores probados.
 
 ## Levantar
+
+Atajos: `make help` (`make up`, `make stop`, `make logs`…). En la VM: `make up DOCKER="sudo docker"`.
 ```bash
 mkdir -p data                 # no hace falta si APP_UID=0
 docker compose up -d --build
@@ -57,4 +59,5 @@ La app queda en `http://127.0.0.1:${APP_PORT}`, sólo en localhost de la máquin
   Si queda olvidada, sigue costando.
 - **Si la máquina también baja de YouTube directo,** como el transcriptor actual, dejar `PROXY_MODE=always`.
   Así YouTube ve las IPs de Webshare y no la de la máquina. Si no, nuestras pruebas pueden hacer que bloquee esa IP.
+- `/radio` (beta) transcribe streams de radio directos, con hora de fin obligatoria. No usa proxy.
 - `/dev` tiene una pantalla técnica con eventos y estado crudo, para diagnosticar.

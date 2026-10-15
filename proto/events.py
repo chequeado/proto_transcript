@@ -49,7 +49,7 @@ def human(e: dict) -> str | None:
             parts.append(f"el manifiesto vence en {hms(e['expires_in_s'])}")
         return "  " + " · ".join(parts)
     if k == "ingest_exit":
-        if e["reason"] == "stopped":
+        if e["reason"] in ("stopped", "max_duration"):
             return None
         err = last_error(e.get("stderr_tail"))
         via = f" · proxy {e['proxy']}" if e.get("proxy") else ""
@@ -60,6 +60,8 @@ def human(e: dict) -> str | None:
         return f"  ingesta: reintento en {e['delay_s']}s (fallas seguidas: {e['consecutive_fails']})"
     if k == "proxy_fallback_on":
         return f"⚠ ingesta: YouTube rechazó la conexión directa ({e['reason']}), paso a usar proxy"
+    if k == "max_duration":
+        return "■ radio: llegó la hora de fin, deteniendo"
     if k == "stream_ended":
         return f"■ el vivo terminó · {(e.get('detail') or '')[:150]}"
     if k == "stt_begin":
@@ -89,7 +91,7 @@ def human(e: dict) -> str | None:
                 + (f" · cola stt {hms(e['stt_queue'] / 10)}" if e["stt_queue"] > 20 else ""))
     if k == "session_end":
         s = e["stats"]
-        cuts = ", ".join(f"{r}×{n}" for r, n in s["exit_reasons"].items() if r not in ("stopped", "eof")) or "ninguno"
+        cuts = ", ".join(f"{r}×{n}" for r, n in s["exit_reasons"].items() if r not in ("stopped", "eof", "max_duration")) or "ninguno"
         lines = [f"■ sesión terminada · {hms(s['wall_s'])} · audio {hms(s['audio_s'])} "
                  f"({(s['coverage'] or 0):.0%}) · corridas {s['runs']} · cortes: {cuts}"]
         for name, x in (s.get("engines") or {}).items():

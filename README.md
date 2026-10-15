@@ -36,6 +36,18 @@ Separa quién habla (A, B, …). Es opcional y cuesta +US$0,12/h (US$0,57/h en t
 - **Pendiente:** al cerrar la sesión, AssemblyAI manda las correcciones de etiquetas (`SpeakerRevision`). Por ahora
   solo se guardan en `events.jsonl`.
 
+### Radios (beta)
+En `/radio` (o `--radio --max-minutes N` en la terminal) se transcribe un stream de radio directo: Icecast,
+Shoutcast o HLS, por ejemplo `https://shoutcast.ccma.cat/ccma/catalunyaradioHD.mp3`.
+- **Sin yt-dlp y sin proxy:** ffmpeg lee la URL con reconexión (`proto/radio.py`). Hay que pegar la URL del stream,
+  no la página de la radio. Se encuentra en [radio-browser.info](https://www.radio-browser.info) o en la pestaña
+  Network del navegador.
+- **Corte obligatorio** con una hora de fin, como máximo a 12 h. Una radio nunca "termina", así que sin corte
+  cobraría para siempre.
+- **El supervisor es el mismo** (`stall`, `slow`, reinicio con espera), pero nunca da el vivo por terminado.
+- **Idioma: catalán + español** (`language_codes=["ca","es"]`). YouTube sigue con `STT_LANGUAGE`.
+- **Probadas (15/10), solo descarga:** Catalunya Ràdio, Radio Nacional (Icecast), Mitre (StreamTheWorld) y Radio 10 (HLS).
+
 ## Setup
 
 ```bash
@@ -48,6 +60,8 @@ Necesita `ffmpeg` y un runtime de JS para yt-dlp (`node` o `deno`; se elige con 
 Para tener la última versión de yt-dlp: `.venv/bin/pip install -U "yt-dlp[default]"`.
 
 ## Docker (para correrlo en una VM)
+
+Atajos: `make help` (`make up`, `make stop`, `make logs`…). En la VM: `make up DOCKER="sudo docker"`.
 
 ```bash
 cp .env.example .env            # cargar ASSEMBLYAI_API_KEY y Webshare

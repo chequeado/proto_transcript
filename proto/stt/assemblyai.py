@@ -48,13 +48,16 @@ class AssemblyAIClient(WebSocketSTT):
     name = "assemblyai"
     rotate_after_s = 2 * 3600 + 50 * 60
 
-    def __init__(self, settings, log, keyterms: list[str] | None = None, speakers: bool = False, prompt: str = ""):
+    def __init__(self, settings, log, keyterms: list[str] | None = None, speakers: bool = False, prompt: str = "",
+                 languages: list[str] | None = None):
         super().__init__(log)
         if not settings.assemblyai_api_key:
             raise FatalSTTError("falta ASSEMBLYAI_API_KEY en .env")
         self.key = settings.assemblyai_api_key
         self.model = settings.assemblyai_model
-        self.language = settings.stt_language
+        if languages is None:
+            languages = [settings.stt_language] if settings.stt_language else []
+        self.languages = languages
         self.keyterms = keyterms or []
         self.speakers = speakers
         self.prompt = (prompt or "").strip()
@@ -66,8 +69,8 @@ class AssemblyAIClient(WebSocketSTT):
             "speech_model": self.model,
             "language_detection": "true",
         }
-        if self.language:
-            params["language_codes"] = json.dumps([self.language])
+        if self.languages:
+            params["language_codes"] = json.dumps(self.languages)
         if self.model.startswith("universal-streaming"):
             params["format_turns"] = "true"
         if self.prompt:

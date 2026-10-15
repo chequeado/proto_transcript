@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transcriptor de radio</title>
+<style>
+  :root {
+    --bg: #f6f6f4; --panel: #ffffff; --fg: #1c1917; --muted: #6b6560; --line: #e4e2df;
+    --accent: #2563eb; --accent-fg: #ffffff; --ok: #15803d; --warn: #b45309; --bad: #b91c1c;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f0e0d; --panel: #1a1917; --fg: #ebe9e6; --muted: #a39e98; --line: #2c2a27;
+      --accent: #3b82f6; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; color-scheme: dark;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; }
+  header { padding: 14px 16px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between;
+           align-items: baseline; }
+  header a { color: var(--accent); font-size: 14px; }
+  input[type=time] { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+                     background: var(--bg); color: var(--fg); }
+  h1 { font-size: 17px; margin: 0; }
+  main { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 16px; padding: 16px;
+         height: calc(100vh - 53px); }
+  @media (max-width: 860px) { main { grid-template-columns: 1fr; height: auto; } #list { max-height: 360px; } }
+  .col { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 12px; }
+  label { display: block; font-weight: 600; font-size: 14px; margin: 12px 0 4px; }
+  label:first-of-type { margin-top: 0; }
+  .hint { font-weight: 400; color: var(--muted); font-size: 13px; }
+  input[type=url], input[type=text], textarea {
+    width: 100%; font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--fg);
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  .check { display: flex; gap: 8px; align-items: center; font-weight: 400; margin-top: 12px; }
+  button { font: inherit; padding: 7px 14px; border: 1px solid var(--line); border-radius: 6px;
+           background: var(--panel); color: var(--fg); cursor: pointer; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); width: 100%;
+                   margin-top: 14px; padding: 9px; font-weight: 600; }
+  button.danger { color: var(--bad); }
+  .error { color: var(--bad); font-size: 14px; margin-top: 8px; min-height: 1em; }
+  #list { flex: 1; overflow: auto; min-height: 120px; }
+  .item { padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .item:first-of-type { border-top: 0; }
+  .item.selected .url { color: var(--accent); }
+  .item .url { font-size: 14px; overflow-wrap: anywhere; }
+  .meta { color: var(--muted); font-size: 13px; }
+  .status { font-size: 13px; font-weight: 600; }
+  .s-ok { color: var(--ok); } .s-warn { color: var(--warn); } .s-bad { color: var(--bad); } .s-off { color: var(--muted); }
+  #viewer { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+  #viewer-head { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap;
+                 padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+  #viewer-title { font-weight: 600; overflow-wrap: anywhere; }
+  .actions { display: flex; gap: 8px; }
+  #text { flex: 1; overflow: auto; padding-top: 12px; min-height: 200px; }
+  #text p { margin: 0 0 12px; }
+  #text time { color: var(--muted); font-size: 12px; margin-right: 8px; font-variant-numeric: tabular-nums; }
+  #text .spk { font-weight: 700; color: var(--accent); margin-right: 6px; }
+  #text .partial { color: var(--muted); font-style: italic; }
+  .empty { color: var(--muted); }
+</style>
+</head>
+<body>
+<header><h1>Transcriptor de radio <span class="hint">· beta</span></h1><a href="/">YouTube</a></header>
+<main>
+  <div class="col">
+    <section>
+      <h2>Nueva transcripción de radio</h2>
+      <label for="url">URL del stream <span class="hint">· no la página de la radio</span></label>
+      <input id="url" type="url" value="https://shoutcast.ccma.cat/ccma/catalunyaradioHD.mp3" required>
+      <label for="until">Cortar a las <span class="hint">· obligatorio, máx. 12 h</span></label>
+      <input id="until" type="time" required>
+      <div class="hint">Idioma: catalán + español</div>
+      <label for="prompt">Contexto <span class="hint">· opcional</span></label>
+      <textarea id="prompt" placeholder="De qué trata y quiénes hablan. Ej.: Magacín matinal de Catalunya Ràdio con entrevistas sobre política catalana."></textarea>
+      <label for="keyterms">Palabras clave <span class="hint">· opcional, separadas por coma (máx. 100)</span></label>
+      <input id="keyterms" type="text" placeholder="Generalitat, Parlament, Illa">
+      <label class="check"><input id="speakers" type="checkbox"> Separar quién habla <span class="hint">(+US$0,12/h)</span></label>
+      <button class="primary" id="start">Empezar</button>
+      <div class="error" id="form-error"></div>
+    </section>
+    <section id="list"><h2>Transcripciones</h2><div id="items"></div></section>
+  </div>
+  <section id="viewer">
+    <div id="viewer-head">
+      <div>
+        <div id="viewer-title" class="empty">Elegí una transcripción de la lista o empezá una nueva.</div>
+        <div id="viewer-status" class="meta"></div>
+      </div>
+      <div class="actions">
+        <button id="download" disabled>Descargar .txt</button>
+        <button id="stop" class="danger" disabled>Detener</button>
+      </div>
+    </div>
+    <div id="text"></div>
+  </section>
+</main>
+<script>
+const PRICE_PER_HOUR = 0.45, SPEAKERS_PER_HOUR = 0.12;  // AssemblyAI universal-3-6-pro, por hora de conexión
+const $ = (s) => document.querySelector(s);
+let sessions = [], current = null, ws = null, poller = null, finals = new Map();
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  const body = await r.json();
+  if (!r.ok) throw new Error(body.detail || r.statusText);
+  return body;
+}
+
+function status(s) {
+  const err = s.error || (s.engines && Object.values(s.engines).map(e => e.error).find(Boolean));
+  if (s.running) {
+    if (err) return ['Error: ' + err, 's-bad'];
+    return { starting: ['Conectando…', 's-warn'], streaming: ['Transcribiendo', 's-ok'],
+             waiting: ['Reconectando…', 's-warn'] }[s.ingest_state] || ['En curso', 's-ok'];
+  }
+  if (err) return ['Error: ' + err, 's-bad'];
+  if (s.ended_reason === 'max_duration') return ['Terminó (hora de fin)', 's-off'];
+  return ['Detenida', 's-off'];
+}
+
+function seconds(s) {
+  return s.running ? (Date.now() - Date.parse(s.started_at)) / 1000 : (s.wall_s || 0);
+}
+
+function duration(sec) {
+  const h = Math.floor(sec / 3600), m = Math.floor(sec % 3600 / 60);
+  return h ? `${h} h ${m} min` : `${m} min`;
+}
+
+function cost(s) {
+  return seconds(s) / 3600 * (PRICE_PER_HOUR + (s.speakers ? SPEAKERS_PER_HOUR : 0));
+}
+
+function usage(s) {
+  const until = s.running && s.ends_at
+    ? ` · corta a las ${new Date(s.ends_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : '';
+  if (!s.running && s.wall_s == null) return until;
+  return ` · ${duration(seconds(s))} · ≈ US$${cost(s).toFixed(2)}${until}`;
+}
+
+function minutesUntil(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const now = new Date(), end = new Date();
+  end.setHours(h, m, 0, 0);
+  if (end <= now) end.setDate(end.getDate() + 1);
+  return Math.ceil((end - now) / 60000);
+}
+
+function when(iso) {
+  return new Date(iso).toLocaleString([], { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function renderList() {
+  const box = $('#items');
+  box.replaceChildren();
+  const visible = sessions.filter(s => s.source === 'radio');
+  if (!visible.length) box.append(el('div', 'empty', 'Todavía no hay transcripciones de radio.'));
+  for (const s of visible) {
+    const [label, cls] = status(s);
+    const item = el('div', 'item' + (s.id === current ? ' selected' : ''));
+    item.append(el('div', 'status ' + cls, label), el('div', 'url', s.url),
+                el('div', 'meta', when(s.started_at) + usage(s)));
+    item.onclick = () => {
+      select(s.id);
+      if (matchMedia('(max-width: 860px)').matches) $('#viewer').scrollIntoView({ behavior: 'smooth' });
+    };
+    box.append(item);
+  }
+}
+
+function renderHead() {
+  const s = sessions.find(x => x.id === current);
+  if (!s) return;
+  const [label, cls] = status(s);
+  $('#viewer-title').className = '';
+  $('#viewer-title').textContent = s.url;
+  const st = $('#viewer-status');
+  st.replaceChildren(el('span', 'status ' + cls, label), document.createTextNode(usage(s)));
+  $('#stop').disabled = !s.running;
+  $('#download').disabled = false;
+}
+
+async function refresh() {
+  try { sessions = await api('/api/sessions'); } catch { return; }
+  renderList();
+  renderHead();
+}
+
+function addFinal(f) {
+  if (f.engine && f.engine !== 'assemblyai') return;
+  finals.set(f.key, f);
+  let p = document.getElementById('f-' + f.key);
+  if (!p) {
+    p = el('p');
+    p.id = 'f-' + f.key;
+    $('#text').insertBefore(p, $('#text .partial'));
+  }
+  p.replaceChildren(el('time', null, new Date(f.ts).toLocaleTimeString()));
+  const segments = (f.extra || {}).segments;
+  if (!segments) { p.append(f.text); return; }
+  segments.forEach((s, i) => {
+    if (i) p.append(el('br'));
+    p.append(el('span', 'spk', s.speaker), s.text);
+  });
+}
+
+function scrollDown() {
+  const t = $('#text');
+  if (t.scrollHeight - t.scrollTop - t.clientHeight < 150) t.scrollTop = t.scrollHeight;
+}
+
+async function loadTranscript(id) {
+  const list = await api(`/api/sessions/${id}/transcript`);
+  if (id === current) { list.forEach(addFinal); scrollDown(); }
+}
+
+// sin WebSocket (p. ej. un proxy que no lo deja pasar): finales cada 3 s, sin parciales
+function poll(id) {
+  clearInterval(poller);
+  poller = setInterval(() => {
+    const s = sessions.find(x => x.id === id);
+    if (id !== current || !s || !s.running) clearInterval(poller);
+    loadTranscript(id).catch(() => {});
+  }, 3000);
+}
+
+async function select(id) {
+  if (ws) { ws.onmessage = ws.onclose = null; ws.close(); ws = null; }
+  clearInterval(poller);
+  current = id;
+  history.replaceState(null, '', '#' + id);
+  finals = new Map();
+  $('#text').replaceChildren(el('p', 'partial'));
+  renderList();
+  renderHead();
+  const s = sessions.find(x => x.id === id);
+  if (s && s.running) {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws/sessions/${id}`);
+    ws.onmessage = (m) => {
+      const msg = JSON.parse(m.data);
+      if (msg.type === 'history') msg.finals.forEach(addFinal);
+      else if (msg.type === 'final') { addFinal(msg); $('#text .partial').textContent = ''; }
+      else if (msg.type === 'partial' && msg.engine === 'assemblyai') $('#text .partial').textContent = msg.text;
+      else if (msg.type === 'status') refresh();
+      scrollDown();
+    };
+    ws.onclose = () => { if (id === current) { ws = null; loadTranscript(id).catch(() => {}); poll(id); } };
+  } else {
+    await loadTranscript(id);
+    if (!finals.size) $('#text').replaceChildren(el('p', 'empty', 'Sin texto.'));
+  }
+}
+
+$('#start').onclick = async () => {
+  const url = $('#url').value.trim();
+  $('#form-error').textContent = '';
+  if (!url) { $('#form-error').textContent = 'Falta la URL.'; return; }
+  if (!$('#until').value) { $('#form-error').textContent = 'Falta la hora de fin.'; return; }
+  const max_minutes = minutesUntil($('#until').value);
+  if (max_minutes > 720) { $('#form-error').textContent = 'La hora de fin está a más de 12 h.'; return; }
+  $('#start').disabled = true;
+  try {
+    const s = await api('/api/sessions', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url, stt: 'assemblyai', source: 'radio', max_minutes, prompt: $('#prompt').value,
+                             keyterms: $('#keyterms').value, speakers: $('#speakers').checked }),
+    });
+    await refresh();
+    select(s.id);
+  } catch (e) {
+    $('#form-error').textContent = e.message;
+  } finally {
+    $('#start').disabled = false;
+  }
+};
+
+$('#stop').onclick = async () => {
+  if (!current || !confirm('¿Detener esta transcripción? No se puede retomar: habría que empezar una nueva.')) return;
+  $('#stop').disabled = true;
+  try { await api(`/api/sessions/${current}`, { method: 'DELETE' }); } catch (e) { alert(e.message); }
+  await refresh();
+};
+
+$('#download').onclick = () => {
+  const s = sessions.find(x => x.id === current);
+  if (!s) return;
+  const lines = [s.url, 'Inicio: ' + new Date(s.started_at).toLocaleString(), ''];
+  for (const f of finals.values()) {
+    const t = new Date(f.ts).toLocaleTimeString();
+    const segments = (f.extra || {}).segments;
+    if (segments) segments.forEach(x => lines.push(`[${t}] ${x.speaker}: ${x.text}`));
+    else lines.push(`[${t}] ${f.text}`);
+  }
+  const a = el('a');
+  a.href = URL.createObjectURL(new Blob([lines.join('\n') + '\n'], { type: 'text/plain;charset=utf-8' }));
+  a.download = `transcripcion-${s.id}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
+refresh().then(() => { if (location.hash.length > 1) select(location.hash.slice(1)); });
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

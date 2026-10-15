@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
@@ -30,6 +31,8 @@ class NewSession(BaseModel):
     prompt: str = ""
     keyterms: str | list[str] | None = None
     speakers: bool = False
+    source: Literal["youtube", "radio"] = "youtube"
+    max_minutes: int | None = None  # radio: obligatorio
 
 
 def get_session(session_id: str):
@@ -42,6 +45,11 @@ def get_session(session_id: str):
 @app.get("/")
 async def index():
     return FileResponse(STATIC / "index.html")
+
+
+@app.get("/radio")
+async def radio():
+    return FileResponse(STATIC / "radio.html")
 
 
 @app.get("/dev")
@@ -57,7 +65,7 @@ async def create_session(body: NewSession):
         if body.audio and not Path(body.audio).resolve().is_relative_to(settings.data_dir.resolve()):
             raise ValueError("el audio tiene que estar dentro de data/")
         session = manager.create(body.url, body.stt, body.audio, keyterms=body.keyterms, speakers=body.speakers,
-                                 prompt=body.prompt)
+                                 prompt=body.prompt, source=body.source, max_minutes=body.max_minutes)
     except Exception as e:
         raise HTTPException(400, str(e))
     return session.stats()

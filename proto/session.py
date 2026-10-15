@@ -6,18 +6,20 @@ import json
 import secrets
 import time
 from collections import Counter, deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .audio import BYTES_PER_SECOND, SAMPLE_RATE
 from .config import Settings
 from .events import EventLog
 from .ingest import AudioSource
+from .radio import RadioSource
 from .replay import FileSource
 from .stt.assemblyai import clean_keyterms
 from .stt.base import Result, make_stt
 
 BROADCAST_SKIP = {"ytdlp_stderr", "ffmpeg_stderr"}
 HEARTBEAT_EVERY = 300
+MAX_RADIO_MINUTES = 12 * 60
 
 
 class Engine:
@@ -37,10 +39,20 @@ class Engine:
 class Session:
     def __init__(self, url: str | None, stt: str, settings: Settings, verbose: bool = False,
                  audio_file: str | None = None, keyterms: str | list[str] | None = None, speakers: bool = False,
-                 prompt: str = ""):
+                 prompt: str = "", source: str = "youtube", max_minutes: int | None = None,
+                 languages: list[str] | None = None):
         self.keyterms = clean_keyterms(keyterms)
         self.speakers = speakers
         self.prompt = (prompt or "").strip()
+        self.kind = source
+        self.max_minutes = max_minutes
+        self.ends_at = None
+        if source == "radio":
+            if not max_minutes or not 1 <= max_minutes <= MAX_RADIO_MINUTES:
+                raise ValueError(f"una radio necesita hora de fin (entre 1 min y {MAX_RADIO_MINUTES // 60} h)")
+            languages = languages or ["ca", "es"]
+            self.ends_at = datetime.now(timezone.utc) + timedelta(minutes=max_minutes)
+        self.languages = languages
         self.id = datetime.now().strftime("%Y%m%d-%H%M%S-") + secrets.token_hex(2)
         self.settings = settings
         self.dir = settings.data_dir / "sessions" / self.id
@@ -51,13 +63,16 @@ class Session:
         if audio_file:
             self.source = FileSource(audio_file, self.log)
             self.url = self.source.url
+        elif source == "radio":
+            self.url = url
+            self.source = RadioSource(url, self.log, settings, max_minutes)
         else:
             self.url = url
             self.source = AudioSource(url, self.log, settings, self.dir)
         names = [n.strip() for n in stt.split(",") if n.strip()]
         self.stt_name = ",".join(names)
         self.engines = {n: Engine(n, make_stt(n, settings, self.log, keyterms=self.keyterms, speakers=speakers,
-                                                prompt=self.prompt))
+                                                prompt=self.prompt, languages=languages))
                         for n in names}
 
         self.finals: dict[str, dict] = {}
@@ -75,10 +90,15 @@ class Session:
             "id": self.id, "url": self.url, "stt": self.stt_name, "sample_rate": SAMPLE_RATE,
             "started_at": datetime.fromtimestamp(self.started_at, timezone.utc).isoformat(),
             "models": {"assemblyai": s.assemblyai_model},
-            "language": s.stt_language, "prompt": self.prompt, "keyterms": self.keyterms, "speakers": self.speakers,
+            "language": s.stt_language, "languages": self.languages, "source": self.kind,
+            "max_minutes": self.max_minutes, "ends_at": self._ends_at_iso(),
+            "prompt": self.prompt, "keyterms": self.keyterms, "speakers": self.speakers,
         }
         self._write_meta()
         self._task = asyncio.create_task(self._run())
+
+    def _ends_at_iso(self) -> str | None:
+        return self.ends_at.isoformat(timespec="seconds") if self.ends_at else None
 
     def _write_meta(self) -> None:
         (self.dir / "meta.json").write_text(json.dumps(self.meta, indent=2, ensure_ascii=False))
@@ -198,6 +218,8 @@ class Session:
             "url": self.url,
             "video_url": src.url,
             "stt": self.stt_name,
+            "source": self.kind,
+            "ends_at": self._ends_at_iso(),
             "prompt": self.prompt,
             "keyterms": self.keyterms,
             "speakers": self.speakers,
@@ -213,7 +235,7 @@ class Session:
             "proxy_mode": src.proxies.mode,
             "proxy": src.proxy.label if src.proxy else None,
             "exit_reasons": dict(exit_reasons),
-            "cuts": sum(n for r, n in exit_reasons.items() if r not in ("stopped", "eof")),
+            "cuts": sum(n for r, n in exit_reasons.items() if r not in ("stopped", "eof", "max_duration")),
             "speed": round(src.speed, 2) if src.speed is not None else None,
             "last_audio_ago_s": round(time.time() - src.last_audio_at, 1) if src.last_audio_at else None,
             "finals": len(self.finals),

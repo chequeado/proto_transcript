@@ -32,11 +32,12 @@ ENGINES = ("assemblyai", "null")
 
 
 def make_stt(name: str, settings, log, keyterms: list[str] | None = None, speakers: bool = False,
-             prompt: str = "") -> STTClient:
+             prompt: str = "", languages: list[str] | None = None) -> STTClient:
     if name == "null":
         from .null import NullClient
         return NullClient(log)
     if name == "assemblyai":
         from .assemblyai import AssemblyAIClient
-        return AssemblyAIClient(settings, log, keyterms=keyterms, speakers=speakers, prompt=prompt)
+        return AssemblyAIClient(settings, log, keyterms=keyterms, speakers=speakers, prompt=prompt,
+                                languages=languages)
     raise ValueError(f"motor STT desconocido: {name} (opciones: {', '.join(ENGINES)})")

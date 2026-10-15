@@ -17,9 +17,10 @@ class SessionManager:
         self.root = settings.data_dir / "sessions"
 
     def create(self, url: str | None, stt: str, audio: str | None = None,
-               keyterms: str | list[str] | None = None, speakers: bool = False, prompt: str = "") -> Session:
+               keyterms: str | list[str] | None = None, speakers: bool = False, prompt: str = "",
+               source: str = "youtube", max_minutes: int | None = None) -> Session:
         session = Session(url, stt, self.settings, audio_file=audio, keyterms=keyterms, speakers=speakers,
-                          prompt=prompt)
+                          prompt=prompt, source=source, max_minutes=max_minutes)
         self.sessions[session.id] = session
         session.start()
         return session
@@ -63,7 +64,8 @@ class SessionManager:
         ended = meta.get("ended") or {}
         return {
             "id": meta["id"], "url": meta.get("url"), "stt": meta.get("stt"), "running": False,
-            "started_at": meta.get("started_at"), "prompt": meta.get("prompt", ""),
+            "started_at": meta.get("started_at"), "source": meta.get("source", "youtube"),
+            "ends_at": meta.get("ends_at"), "prompt": meta.get("prompt", ""),
             "keyterms": meta.get("keyterms", []), "speakers": meta.get("speakers", False),
             "ingest_state": ended.get("ingest_state", "stopped"), "ended_reason": ended.get("ended_reason"),
             "error": ended.get("error"), "wall_s": ended.get("wall_s"), "finals": ended.get("finals"),

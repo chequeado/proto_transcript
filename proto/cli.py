@@ -53,6 +53,8 @@ async def main() -> None:
     ap.add_argument("--keyterms", help="términos a favorecer, separados por coma (máx. 100, ≤50 caracteres c/u)")
     ap.add_argument("--keyterms-file", help="archivo con un término por línea")
     ap.add_argument("--speakers", action="store_true", help="separar hablantes (+US$0,12/h)")
+    ap.add_argument("--radio", action="store_true", help="stream de radio directo (ffmpeg, sin yt-dlp ni proxy)")
+    ap.add_argument("--max-minutes", type=int, help="radio: cortar después de N minutos (obligatorio con --radio)")
     ap.add_argument("-v", "--verbose", action="store_true", help="mostrar también el stderr de yt-dlp/ffmpeg")
     args = ap.parse_args()
     if not args.url and not args.audio:
@@ -62,7 +64,8 @@ async def main() -> None:
     screen = Screen()
     try:
         session = Session(args.url, args.stt, settings, verbose=args.verbose, audio_file=args.audio,
-                          keyterms=keyterms, speakers=args.speakers, prompt=args.prompt)
+                          keyterms=keyterms, speakers=args.speakers, prompt=args.prompt,
+                          source="radio" if args.radio else "youtube", max_minutes=args.max_minutes)
     except ValueError as e:
         ap.error(str(e))
     session.log.before_print = screen.clear_partial
